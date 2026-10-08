@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+alembic
+pydantic
+pydantic-settings
+email-validator
+argon2-cffi
+pyjwt
+python-multipart
+slowapi

@@ -1,0 +1,67 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ---------- Virtual environments ----------
+.venv/
+venv/
+env/
+
+# ---------- Secrets and env files ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Databases ----------
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ---------- Tests and coverage ----------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# ---------- Type checkers and linters ----------
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# ---------- Editors and IDEs ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---------- OS files ----------
+.DS_Store
+Thumbs.db
+
+# ---------- Node (frontend) ----------
+node_modules/
+.next/
+.vite/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Logs and temp ----------
+*.log
+logs/
+tmp/
+.cache/
+
+# ---------- RepoTrackr runtime data ----------
+# Cloned repos and index cache created in Parts 2+
+data/clones/
+data/cache/
