@@ -150,11 +150,11 @@ RepoTrackr-AI/
     ├── .venv/                         [P1]       gitignored, created outside logged steps: Python 3.14.2 + deps installed (Step 0.8 verified)
     ├── .env.example                   [P1]       every Settings variable with placeholder values (Step 1A)
     ├── .env                           [P1]       gitignored local copy of .env.example with a real random SECRET_KEY (Step 1A)
-    ├── alembic/ + alembic/versions/   [P1]       .gitkeep each - migrations (no alembic init run yet)
+    ├── alembic/ + alembic/versions/   [P1]       alembic.ini, env.py, script.py.mako, versions/ with first migration (Step 1C); sqlalchemy.url from settings
     ├── tests/                         [P1+]      __init__.py - auth/repos tests first, later pipeline/analysis
     └── app/
         ├── __init__.py / main.py      [P1]       main.py empty placeholder (app factory due Step 1C+)
-        ├── core/                      [P1]       config.py = pydantic-settings Settings + get_settings() (Step 1A); database.py = SQLAlchemy engine/session/Base (Step 1B); errors, logging, CORS due later
+        ├── core/                      [P1]       config.py = pydantic-settings Settings + get_settings() (Step 1A); database.py = SQLAlchemy engine/session/Base (Step 1B); alembic/env.py (Step 1C); errors, logging, CORS due later
         ├── security/                  [P1]       password hashing, JWT, signed tokens; secret_strip() added [P2/P3]
         ├── models/                    [P1]       SQLAlchemy 2.0 models: User, EmailToken, Repo (Step 1B); index tables later [P2+]
         ├── schemas/                   [P1]       Pydantic request/response models
@@ -210,12 +210,24 @@ RepoTrackr-AI/
 - **Why:** Single source of truth for data schema. Uses SQLAlchemy 2.0 typed ORM for IDE support and runtime validation. Foreign keys with `ondelete="CASCADE"` and `passive_deletes=True` ensure referential integrity; the SQLite `PRAGMA foreign_keys=ON` event listener makes cascades work in SQLite. Timezone-aware datetimes (UTC) avoid timezone bugs. `EmailTokenType` enum restricts token types to valid values.
 - **How it connects:** `config.py` → `get_settings()` provides `DATABASE_URL` → `database.py` creates `engine` and `SessionLocal` → models inherit from `Base` → `Base.metadata.create_all()` (later via Alembic) creates tables. The `get_db()` dependency yields a session per request and guarantees `close()`.
 
+## Alembic & Migrations (Step 1C)
+
+- **What:** `backend/alembic.ini` (no hardcoded URL), `backend/alembic/env.py` configured to read `DATABASE_URL` from `get_settings()`, import `Base` from `app.core.database`, and import `app.models` so all models are registered on `Base.metadata`. `render_as_batch=True` for SQLite/Postgres compatibility. First migration `versions/9dbee76d77e4_create_users_email_tokens_repos.py` creates three tables: `users`, `email_tokens`, `repos` with all columns, indexes, FKs (ondelete CASCADE), UNIQUE constraints, and correct `EmailTokenType` enum (`verify`/`reset`).
+- **Why:** Version-controlled schema changes. URL comes from config (not hardcoded) so dev/prod use different DBs without code changes. `render_as_batch=True` makes migrations work on SQLite (no ALTER COLUMN support) and Postgres alike.
+- **How it connects:** `config.py` → `get_settings().DATABASE_URL` → `alembic/env.py` sets `sqlalchemy.url` → `alembic upgrade head` applies migrations → creates `backend/repotrackr.db` (SQLite) with tables matching models.
+- **Commands:**
+  - `alembic upgrade head` — apply all pending migrations
+  - `alembic downgrade base` — revert all migrations (drops tables)
+  - `alembic revision --autogenerate -m "message"` — generate new migration from model changes
+  - `alembic check` — verify models and migrations are in sync
+
 ## Status
 
-Step 1B done: SQLAlchemy engine/session + typed models (User, EmailToken, Repo).
+Step 1C done: Alembic initialized + first migration applied.
 
-- Done (Step 1B): `app/core/database.py` (engine with SQLite `check_same_thread=False` + `PRAGMA foreign_keys=ON`, `SessionLocal`, `Base`, `get_db()` dependency); `app/models/user.py`, `email_token.py`, `repo.py` with SQLAlchemy 2.0 `Mapped`/`mapped_column` style, enums, FKs with CASCADE, unique constraints, relationships; `app/models/__init__.py` exports all. Verified: `Base.metadata.tables` shows `['email_tokens', 'repos', 'users']`; in-memory SQLite test creates tables, inserts user/repo/token, UNIQUE constraint rejects duplicate repo URL, cascade delete removes child rows on user delete; no `.db` files tracked.
+- Done (Step 1C): `alembic init alembic` (removed .gitkeeps), `alembic.ini` (URL from settings), `alembic/env.py` (get_settings, Base, app.models, render_as_batch=True), first autogenerate migration (`create users, email_tokens, repos`) reviewed and fixed (enum values, defaults). Verified: `alembic upgrade head` creates `backend/repotrackr.db`; `sqlite3 repotrackr.db .tables` shows `users, email_tokens, repos, alembic_version`; `alembic downgrade base` removes 3 tables, `alembic upgrade head` recreates them; `alembic check` reports no new changes; no `.db` file tracked.
+- Done (Step 1B): `app/core/database.py` (engine with SQLite `check_same_thread=False` + `PRAGMA foreign_keys=ON`, `SessionLocal`, `Base`, `get_db()`); `app/models/` with SQLAlchemy 2.0 `Mapped`/`mapped_column` style, enums, FKs with CASCADE, unique constraints, relationships; `app/models/__init__.py` exports all.
 - Done (Step 1A): `backend/.venv` Python 3.14.2; pinned `requirements.txt`/`requirements-dev.txt`; `app/core/config.py` Settings + `get_settings()`; `.env.example` + `.env` with random `SECRET_KEY`; AGENTS.md updated.
 - Earlier (Step 0.8): full P1-P4 skeleton; `docker/` top-level; docs in `docs/`.
-- Still placeholders / not started: `backend/app/main.py` (no app factory), Alembic (`alembic init` not run), error handlers, CORS wiring, routers, endpoints, `README.md`, `docker/docker-compose.yml`.
-- Next: Step 1C - Alembic init + first migration; then Step 1D - app factory, CORS, error handlers, routers, endpoints. Do not build ahead.
+- Still placeholders / not started: `backend/app/main.py` (no app factory), error handlers, CORS wiring, routers, endpoints, `README.md`, `docker/docker-compose.yml`.
+- Next: Step 1D - app factory, CORS, error handlers, routers, endpoints. Do not build ahead.
