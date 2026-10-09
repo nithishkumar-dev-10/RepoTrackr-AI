@@ -71,3 +71,18 @@ Every step appends an entry here. Never delete old entries.
   - `pip check` - clean
   - All env variables from `.env.example` now defined
 - **Known issues / TODOs:** DB engine/session, models, Alembic, app factory, CORS, error handlers, routers, endpoints still pending (Steps 1B+).
+
+---
+
+## Step 1B - Database session and models
+
+- **Date:** 2026-10-09
+- **Files created:**
+  - `backend/app/core/database.py` - SQLAlchemy 2.0 engine, SessionLocal, Base, get_db() dependency with SQLite PRAGMA foreign_keys=ON
+  - `backend/app/models/user.py` - User model (id, email unique, password_hash, is_verified, created_at UTC, relationships to EmailToken and Repo with cascade)
+  - `backend/app/models/email_token.py` - EmailToken model + EmailTokenType enum (id, user_id FK CASCADE, type enum, token_hash, expires_at/used_at UTC)
+  - `backend/app/models/repo.py` - Repo model (id, user_id FK CASCADE, url, owner, name, status default "added", created_at UTC, UNIQUE user_id+url)
+  - `backend/app/models/__init__.py` - exports User, EmailToken, EmailTokenType, Repo
+- **What changed and why:** Created the database layer and SQLAlchemy 2.0 typed models. The engine reads DATABASE_URL from config, enables SQLite foreign key enforcement, and provides a session dependency. Models use Mapped/mapped_column style with timezone-aware datetimes, proper FK cascades, and constraints. Relationships use cascade="all, delete-orphan" + passive_deletes=True so deleting a User removes its EmailTokens and Repos.
+- **New commands / env variables / endpoints / migrations:** none
+- **Known issues / TODOs:** Alembic init + first migration, app factory, CORS, error handlers, routers, endpoints still pending (Steps 1C+).
