@@ -41,3 +41,33 @@ Every step appends an entry here. Never delete old entries.
 - **What changed and why:** Docker assets now have their own top-level home instead of cluttering the root. Future `docker/backend.Dockerfile` (Part 1 Step 6) will live here too, with build context `../backend`; run via `docker compose -f docker/docker-compose.yml up`.
 - **New commands / env variables / endpoints / migrations:** run command changed to `docker compose -f docker/docker-compose.yml up`. No Dockerfile yet.
 - **Known issues / TODOs:** `docker/docker-compose.yml` is still an empty placeholder; Dockerfile due in Part 1 Step 6.
+
+---
+
+## Step 0.8 - Setup verification
+
+- **Date:** 2026-10-08
+- **Files created / modified / deleted:** modified `docs/project_summary.md` (status line, tree entries for requirements.txt and .venv); appended this entry to `docs/changes.md`. No code files touched.
+- **What changed and why:** Read-only verification of the whole setup: venv, root files, folder structure vs the approved tree, docs, and git. Results: 15/18 checks PASS, 3 FAIL - (1) `backend/requirements.txt` was no longer empty, (2) status line was stale at Step 0.6, (3) this entry could not be written under plan mode (now applied). Fixes: this log entry, refreshed status line, tree annotations below.
+- **Changes observed that were made outside logged steps (recorded now):** `backend/.venv` created (Python 3.14.2, 36 installed packages incl. fastapi, sqlalchemy, alembic, pydantic, argon2-cffi, pyjwt, slowapi, uvicorn); `backend/requirements.txt` filled with 11 Part 1 dependencies (fastapi, uvicorn[standard], sqlalchemy, alembic, pydantic, pydantic-settings, email-validator, argon2-cffi, pyjwt, python-multipart, slowapi) - kept, not emptied; root `.gitignore` expanded from 8 lines to a full Python/IDE/OS/frontend ignore set (all 9 required entries still present); initial git commit `40e23e0 setup project structure`.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Known issues / TODOs:** nothing built yet; `docker/docker-compose.yml` and `README.md` still empty; execution plan file still in docs/ awaiting deletion.
+
+---
+
+## Step 1A - Venv, requirements, config
+
+- **Date:** 2026-10-09
+- **Files created / modified:**
+  - `backend/requirements.txt` - rewritten as full `pip freeze` output with top-level comment listing 11 runtime deps
+  - `backend/requirements-dev.txt` - created with `-r requirements.txt` + pinned pytest, httpx and sub-deps
+  - `backend/app/core/config.py` - created Settings class (pydantic-settings) with all required fields and cached `get_settings()`
+  - `backend/.env.example` - filled with all Settings variables and placeholder values
+  - `backend/.env` - created from .env.example with random SECRET_KEY (gitignored)
+  - `AGENTS.md` - added venv usage line to Working style
+- **What changed and why:** Set up the Python environment with all Part 1 runtime dependencies pinned, added dev dependencies, created the typed configuration layer using pydantic-settings that reads from `.env`, and documented all environment variables. The config provides a single source of truth for app settings, database URL, auth secrets, CORS origins, and SMTP settings.
+- **New commands / env variables / endpoints / migrations:**
+  - `backend/.venv/bin/python` - Python 3.14.2 (3.11+)
+  - `pip check` - clean
+  - All env variables from `.env.example` now defined
+- **Known issues / TODOs:** DB engine/session, models, Alembic, app factory, CORS, error handlers, routers, endpoints still pending (Steps 1B+).

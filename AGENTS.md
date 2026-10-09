@@ -4,6 +4,7 @@
 - We build in small steps. Only do what the current step's prompt asks. Never build ahead.
 - Stop at the end of each step and wait for the next prompt.
 - Never run or execute any code from repos we analyze later.
+- The venv is at backend/.venv. Run all commands from backend/ with it activated. Never install a package without adding it to requirements.txt.
 
 ## RULE 1: Keep docs/project_summary.md current
 docs/project_summary.md is the single source of truth for the project's current state. After every step, update it so a new developer could read only this file and understand the project. It must explain:

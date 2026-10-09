@@ -145,13 +145,16 @@ RepoTrackr-AI/
 │   ├── agent/                         [P4]       .gitkeep
 │   └── data/                          [P4]       .gitkeep - labeled plan items, PR-derived tasks
 └── backend/                           FastAPI project
-    ├── requirements.txt               [P1]       empty placeholder (requirements only, no pyproject)
-    ├── .env.example                   [P1]       empty placeholder
+    ├── requirements.txt               [P1]       top-level comment lists the 11 runtime deps; rest is full `pip freeze` (all sub-deps pinned) - Step 1A
+    ├── requirements-dev.txt           [P1]       `-r requirements.txt` + pinned pytest, httpx and their sub-deps - Step 1A
+    ├── .venv/                         [P1]       gitignored, created outside logged steps: Python 3.14.2 + deps installed (Step 0.8 verified)
+    ├── .env.example                   [P1]       every Settings variable with placeholder values (Step 1A)
+    ├── .env                           [P1]       gitignored local copy of .env.example with a real random SECRET_KEY (Step 1A)
     ├── alembic/ + alembic/versions/   [P1]       .gitkeep each - migrations (no alembic init run yet)
     ├── tests/                         [P1+]      __init__.py - auth/repos tests first, later pipeline/analysis
     └── app/
-        ├── __init__.py / main.py      [P1]       main.py empty placeholder
-        ├── core/                      [P1]       config, db session, errors, logging, CORS
+        ├── __init__.py / main.py      [P1]       main.py empty placeholder (app factory due Step 1B+)
+        ├── core/                      [P1]       config.py = pydantic-settings Settings + get_settings() (Step 1A); db session, errors, logging, CORS due later
         ├── security/                  [P1]       password hashing, JWT, signed tokens; secret_strip() added [P2/P3]
         ├── models/                    [P1]       SQLAlchemy models: users, email_tokens, repos; index tables later [P2+]
         ├── schemas/                   [P1]       Pydantic request/response models
@@ -191,10 +194,17 @@ RepoTrackr-AI/
 
 **Which parts own which folder:** [P1] core, security, models, schemas, features/auth, features/repos, alembic, tests (auth/repos), tasks stubs, docker/, README, .gitignore, root config; [P2] tasks, pipeline/*, features/indexing (real), tests/pipeline; [P3] analysis/*, ai/*, features/plan|reader|context (real), tests/analysis; [P4] agent/, evals/.
 
+## Configuration (Step 1A)
+
+- **What:** `backend/app/core/config.py` defines a single `Settings` class (pydantic-settings `BaseSettings`) and a cached `get_settings()` (via `@lru_cache`). `.env.example` documents every variable with placeholders; `.env` is the gitignored local copy with a real random `SECRET_KEY`.
+- **Why:** one typed, validated source of truth for all configuration. `Settings` fails fast if `SECRET_KEY` is missing, and `CORS_ORIGINS` accepts a plain comma-separated string in `.env` yet is exposed to the app as a real `list[str]` (parsed by a `field_validator` plus `NoDecode`). `get_settings()` is cached so the `.env` file is read once per process.
+- **How it flows:** at import/startup, code calls `get_settings()` → pydantic-settings merges defaults, `backend/.env` (path resolved from `config.py`'s location, not cwd), and any environment variables (real env vars win) → a validated `Settings` object is returned and reused everywhere. Variables: `APP_NAME`, `ENV` (dev/prod), `DATABASE_URL` (default `sqlite:///./repotrackr.db`), `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES` (15), `REFRESH_TOKEN_EXPIRE_DAYS` (7), `FRONTEND_URL`, `CORS_ORIGINS` (list), `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`. Later steps consume this: the DB session (1B) reads `DATABASE_URL`, auth reads `SECRET_KEY`/token expiries, CORS reads `CORS_ORIGINS`, email reads the `SMTP_*` values.
+
 ## Status
 
-Step 0.6 done: full structure created, no logic yet.
+Step 1A done: venv + pinned requirements + typed Settings config.
 
-- Done: docs moved to `docs/`, path references fixed, AGENTS.md updated (docs/ paths + "Structure is fixed" section), full P1-P4 skeleton created (30 empty `__init__.py`, 9 `.gitkeep`, 5 empty placeholder files, root `.gitignore`).
-- Everything is an empty placeholder: no modules, no imports, no logic, no tables, no migrations, no venv, no installs. Nothing runs.
-- Next: Part 1 backend setup, per step prompts - do not build ahead.
+- Done (Step 1A): `backend/.venv` verified at Python 3.14.2 (3.11+); `pip check` clean; `requirements.txt` rewritten as full `pip freeze` (top-level comment lists the 11 runtime deps); `requirements-dev.txt` added (`-r requirements.txt` + pinned `pytest`, `httpx` and sub-deps); `app/core/config.py` (Settings + `get_settings()`) added; `.env.example` filled and `backend/.env` created with a random `SECRET_KEY`; AGENTS.md working-style line added; verified config import prints `RepoTrackr AI dev sqlite:///./repotrackr.db ['http://localhost:3000', 'http://localhost:5173']`.
+- Earlier (Step 0.8): full P1-P4 skeleton (30 `__init__.py`, 9 `.gitkeep`, root `.gitignore`); `docker/` top-level (Step 0.7); docs in `docs/`.
+- Still placeholders / not started: `backend/app/main.py` (no app factory yet), DB engine + session, SQLAlchemy `Base`, models, Alembic (`alembic init` not run), error handlers, CORS wiring, routers, endpoints, `README.md`, `docker/docker-compose.yml`.
+- Next: Step 1B onward - database + models, then Alembic, then app factory/CORS/error handlers/routers, per step prompts. Do not build ahead.
