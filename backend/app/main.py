@@ -5,9 +5,12 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import get_settings
+from app.core.ratelimit import limiter
+from app.features.auth.router import router as auth_router
 
 logger = logging.getLogger("app")
 
@@ -25,6 +28,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(title=settings.APP_NAME)
+
+    app.state.limiter = limiter
 
     app.add_middleware(
         CORSMiddleware,
@@ -45,6 +50,15 @@ def create_app() -> FastAPI:
                 "Request validation failed",
                 jsonable_encoder(exc.errors()),
             ),
+        )
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_exception_handler(
+        request: Request, exc: RateLimitExceeded
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=429,
+            content=_error_payload("http_error", "Too many requests"),
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -70,6 +84,8 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["system"])
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    app.include_router(auth_router)
 
     return app
 

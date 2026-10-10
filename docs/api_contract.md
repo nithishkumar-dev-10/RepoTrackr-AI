@@ -74,8 +74,14 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 Notes:
 - `POST /auth/signup` creates the user unverified and triggers a verification email. 409 if the email already exists.
 - `POST /auth/login` returns 403 while the email is unverified (use resend-verification).
-- `POST /auth/forgot-password` always returns the same 200 body, whether or not the email exists (prevents account enumeration).
+- `POST /auth/refresh` accepts only a refresh token; an access token is rejected with 401. A new access + refresh pair is returned.
+- `POST /auth/logout` is **client-side only**: there is no server-side token revocation table, so the client discards its tokens. The endpoint just confirms success.
+- `POST /auth/forgot-password` always returns the same 200 body, whether or not the email exists (prevents account enumeration); the reset email is sent in the background so it does not leak timing.
 - `POST /auth/verify-email` and `/auth/reset-password` fail with 400 for expired, used, or invalid tokens.
+- `POST /auth/reset-password` applies the password rule to `new_password` (422 if weak).
+- `POST /auth/change-password` returns 400 if the current password is wrong, or if the new password is the same as the current one.
+- `DELETE /auth/account` deletes the user and cascades to their `email_tokens` and `repos`.
+- Rate limiting applies to `POST /auth/signup`, `/auth/login`, `/auth/forgot-password`, and `/auth/resend-verification`: exceeding the per-IP limit returns 429 `http_error` `"Too many requests"`. Limits are configurable via `RATE_LIMIT_*` env vars (see `.env.example`).
 
 ### Repos
 

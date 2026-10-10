@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     VERIFY_TOKEN_EXPIRE_HOURS: int = 24
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
 
+    RATE_LIMIT_LOGIN: str = "5/minute"
+    RATE_LIMIT_SIGNUP: str = "10/minute"
+    RATE_LIMIT_FORGOT_PASSWORD: str = "5/minute"
+    RATE_LIMIT_RESEND_VERIFICATION: str = "5/minute"
+
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS: Annotated[list[str], NoDecode] = []
 
