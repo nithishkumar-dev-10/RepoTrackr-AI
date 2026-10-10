@@ -9,7 +9,7 @@ RepoTrackr-AI/
 ├── .gitignore                       # Ignores Python/venv/secrets/DB/frontend junk
 ├── AGENTS.md                        # Working rules for contributors/agents
 ├── README.md                        # Empty; not written yet
-├── project_summary.md               # This file
+├── project_summary.md               # Legacy copy; canonical doc is docs/project_summary.md
 ├── backend/
 │   ├── .env                         # Real local secrets/settings (gitignored)
 │   ├── .env.example                 # Template for backend/.env
@@ -34,7 +34,11 @@ RepoTrackr-AI/
 │   │   │   ├── user.py              # User table + relationships
 │   │   │   ├── email_token.py       # EmailToken table + EmailTokenType enum
 │   │   │   └── repo.py              # Repo table
-│   │   ├── schemas/__init__.py      # Empty — Pydantic request/response models
+│   │   ├── schemas/
+│   │   │   ├── __init__.py          # Re-exports all schemas
+│   │   │   ├── common.py            # ErrorDetail, ErrorResponse, MessageResponse
+│   │   │   ├── auth.py              # Auth request/response schemas + password rule
+│   │   │   └── repo.py              # RepoCreate/RepoOut/RepoListOut + GitHub URL parse
 │   │   ├── security/__init__.py     # Empty — password/JWT helpers
 │   │   ├── features/
 │   │   │   ├── __init__.py          # Empty package marker
@@ -68,6 +72,10 @@ RepoTrackr-AI/
 ├── docker/
 │   └── docker-compose.yml           # Empty; no Dockerfile yet
 ├── docs/
+│   ├── RepoTrackr-AI-Execution-Plan.md  # Source-of-truth roadmap (Parts 1-4)
+│   ├── project_summary.md           # This file (canonical)
+│   ├── api_contract.md              # Endpoint contract for Parts 1-4
+│   ├── mock_responses.md            # Example JSON for frontend mocks
 │   └── changes.md                   # Step-by-step change log (all history)
 ├── evals/
 │   ├── .gitkeep
@@ -84,7 +92,7 @@ RepoTrackr-AI/
 ## The Stack at a Glance
 Settings -> Database Core -> Data Models -> Schema Migrations (Alembic) -> Pipeline & Analysis -> AI Layer -> Features & HTTP API -> Frontend, with Docker/Evals/Scripts as supporting tooling.
 
-(Layers 1–4 are fully built, and Layer 7 has its app factory plus `GET /health`. Everything above that is an empty folder skeleton.)
+(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, and the Pydantic schemas plus the endpoint/mock contract. The feature routers, `security` helpers and everything above are an empty folder skeleton.)
 
 ## Layer by Layer
 
@@ -396,11 +404,11 @@ Reserved for the loop where the model calls tools over retrieved evidence.
 
 **What it is:** The folder skeleton for the FastAPI application: the app object, request/response schemas, security helpers, and the per-feature route modules.
 **Why it exists:** It is the top edge the outside world talks to; keeping endpoints grouped by feature keeps routing readable as the app grows.
-**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, and `GET /health`), `backend/app/schemas/__init__.py`, `backend/app/security/__init__.py`, and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
+**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, and `GET /health`), `backend/app/schemas/{__init__,common,auth,repo}.py` (the Pydantic request/response models), `backend/app/security/__init__.py`, and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
 **Depends on:** Layers 1–4 (config, DB, models, migrations) and, once built, Layers 5–6.
 **Used by:** the frontend and any external client.
 
-*Partially built. `main.py` defines the app and `GET /health`; every feature router, plus `schemas` and `security`, is still an empty `__init__.py`.*
+*Partially built. `main.py` defines the app and `GET /health`, and `schemas/` defines all Part 1 request/response models plus the documented endpoint contract. Every feature router and `security` is still an empty `__init__.py`.*
 
 #### Study Notes for this layer
 
@@ -471,10 +479,34 @@ Reserved for the reader feature endpoints.
 *Think of it as:* a guided tour desk.
 
 **What is `schemas`?**
-Reserved for Pydantic request/response models.
+The Pydantic request/response models for the API: `common.py` (error/message envelopes), `auth.py` (auth requests, `TokenResponse`, `UserOut`, password rule), `repo.py` (`RepoCreate`/`RepoOut`/`RepoListOut`, GitHub URL parsing), re-exported from `__init__.py`.
 *Why do we need it?* ORM models must not leak straight to the API; schemas validate input and shape output.
 *What breaks without it?* No input validation or response contracts.
 *Think of it as:* customs forms that standardize what can cross the border.
+
+**What is `ErrorResponse` / `MessageResponse`?**
+`ErrorResponse` mirrors the app's error envelope (`{"error": {"code", "message", "details?"}}`); `MessageResponse` is a simple `{"message": str}` for confirmations.
+*Why do we need it?* They pin the one error shape the handlers in `main.py` already emit and give simple successes a type.
+*What breaks without it?* The error contract would live only in handler code, and responses would be untyped.
+*Think of it as:* the standard complaint form and the standard receipt.
+
+**What is the password rule?**
+`validate_password_strength` (min 8 chars, at least one letter and one digit) applied to `SignupRequest`, `ResetPasswordRequest.new_password`, and `ChangePasswordRequest.new_password`.
+*Why do we need it?* Same rule server-side and in the contract, so the frontend can mirror it.
+*What breaks without it?* Weak or inconsistent passwords would pass validation.
+*Think of it as:* a minimum bar on the door to the club.
+
+**What is `RepoCreate` doing?**
+It takes only `url`, validates it is a public `github.com/owner/name` URL (accepting missing scheme, `www.`, trailing slash, `.git`), normalizes it to `https://github.com/owner/name`, and exposes `owner`/`name` as parsed properties.
+*Why do we need it?* The client sends a link; the server derives owner/name and rejects non-GitHub links.
+*What breaks without it?* Any string could be stored as a repo and owner/name parsing would be duplicated.
+*Think of it as:* a form that only accepts library addresses and automatically fills in the branch and shelf.
+
+**What are `RepoOut` / `RepoListOut`?**
+`RepoOut` is the wire shape of a repo (`id`, `url`, `owner`, `name`, `status`, `created_at`, `from_attributes=True`); `RepoListOut` wraps a list as `{"repos": [...]}`.
+*Why do we need it?* It hides `user_id` and lets list and detail responses stay consistent objects.
+*What breaks without it?* Internal columns leak and lists have no envelope to grow into.
+*Think of it as:* the display card for a repo, and a folder that holds the cards.
 
 **What is `security`?**
 Reserved for password hashing and JWT helpers.
@@ -595,9 +627,10 @@ Working now (built and previously verified, see `docs/changes.md`):
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and the first migration creating `users`, `email_tokens`, `repos`.
 - HTTP API app factory (`app/main.py`): `create_app()`, CORS from `CORS_ORIGINS`, global JSON error handlers, and `GET /health`; runnable via `uvicorn app.main:app`.
+- Request/response schemas (`app/schemas/{common,auth,repo}.py`) and the documented endpoint/mock contract (`docs/api_contract.md`, `docs/mock_responses.md`).
 
 Not implemented yet:
-- Request/response schemas (`app/schemas`), security helpers (`app/security`).
+- Security helpers (`app/security`) — password hashing and JWT.
 - All feature routers (`app/features/*`: auth, repos, plan, indexing, context, reader).
 - Deterministic pipeline and analysis (`app/pipeline/*`, `app/analysis/*`), background tasks (`app/tasks`).
 - AI layer (`app/ai/*`, `app/agent`).
@@ -650,7 +683,7 @@ curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
 
 - **Layer 7, `app/main.py`:** the app factory now exists — extend it by including the `features/*` routers (and any extra middleware) as they are built.
 - **Layer 7, `app/security/`:** implement password hashing with `argon2-cffi` and JWT creation/validation with `PyJWT`, using `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`.
-- **Layer 7, `app/schemas/`:** write Pydantic schemas for users, tokens, and repos so ORM models don't leak onto the wire.
+- **Layer 7, `app/schemas/`:** schemas for Part 1 exist — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`) when new endpoints are added.
 - **Layer 7, `app/features/auth/`:** wire the existing `User` and `EmailToken` models into signup/login/verify/reset endpoints, using `SMTP_*`/`EMAIL_FROM` for sending.
 - **Layer 7, `app/features/repos/`:** add "add repo" and "list my repos" endpoints that write `Repo` rows (respect the `uq_user_repo_url` constraint) and use `get_db()`.
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
