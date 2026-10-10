@@ -104,3 +104,15 @@ Every step appends an entry here. Never delete old entries.
   - `alembic downgrade base` — drops the 3 tables
   - `alembic check` — no new changes (models match migration)
 - **Known issues / TODOs:** App factory, CORS, error handlers, routers, endpoints still pending (Step 1D).
+
+---
+
+## Docs cleanup - project_summary.md rewritten, AGENTS.md Rule 1 updated
+
+- **Date:** 2026-10-09
+- **Files modified:**
+  - `docs/project_summary.md` - completely rewritten to describe only current codebase (no plan content)
+  - `AGENTS.md` - RULE 1 replaced with strict "current code only" rule; Design rule added; checklist item 2 updated to "from the real files"
+- **What changed and why:** Removed all part-wise plan (P1-P4), scope lists, cut order, eval tables, and future features from project_summary.md. The file now has exactly 9 sections: What this is, Current state, Folder map, File reference, How it connects, Database, Environment variables, Commands, Gotchas. AGENTS.md Rule 1 now explicitly forbids plan content in project_summary.md and points to RepoTrackr-AI-Execution-Plan.md for roadmap.
+- **New commands / env variables / endpoints / migrations:** none
+- **Known issues / TODOs:** none for this docs-only change.
