@@ -153,3 +153,85 @@ Every step appends an entry here. Never delete old entries.
   - None. No new env variables, dependencies, or migrations. Endpoints listed in `docs/api_contract.md` are contract-only (not implemented in code yet).
 - **Assumptions made (changeable):** password = min 8, at least one letter and one digit; `TokenResponse` is `access_token` + `refresh_token` (auth uses `Authorization: Bearer <access_token>`); `RepoListOut` wraps `{"repos": [...]}`; `RepoCreate` accepts only `url` and derives `owner`/`name`; Parts 2-4 stubs return HTTP 501 with `{"status": "not_implemented"}`.
 - **Known issues / TODOs:** No endpoint uses the schemas yet. `app/security` (hashing/JWT) and all `app/features/*` routers are still empty; wiring these schemas into routers is future work.
+
+---
+
+## Step 1F - Security utilities
+
+- **Date:** 2026-10-10
+- **Files created / modified:**
+  - `backend/app/security/passwords.py` - `hash_password()` (argon2 encoded hash) and `verify_password()` (constant-time check returning `False` on mismatch/malformed hash).
+  - `backend/app/security/tokens.py` - `TokenType` (`access`/`refresh`), `TokenError`, `create_access_token()`, `create_refresh_token()`, `decode_token(token, expected_type)`; HS256 signed with `SECRET_KEY`, verifies signature + expiry + type.
+  - `backend/app/security/email_tokens.py` - `generate_email_token()` (returns raw + SHA-256 hash), `hash_token()`, `expires_at(type)` (verify vs reset lifetimes), `is_expired()`, `is_used()`.
+  - `backend/app/security/__init__.py` - re-exports the public security API.
+  - `backend/app/core/config.py` - added `VERIFY_TOKEN_EXPIRE_HOURS=24` and `RESET_TOKEN_EXPIRE_MINUTES=30`; `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS` already existed.
+  - `backend/.env.example` - added the two new variables.
+  - `backend/app/schemas/auth.py` - small change: `TokenResponse.token_type: str = "bearer"`.
+  - `backend/tests/conftest.py` - sets deterministic test env vars before app imports.
+  - `backend/tests/test_security.py` - 18 tests covering hashing, JWT roundtrip, access/refresh mix-up rejection, expired/tampered/wrong-secret rejection, and email-token hash/expiry/used checks.
+  - `docs/api_contract.md`, `docs/mock_responses.md` - `token_type` added to `TokenResponse` docs/examples.
+  - `docs/project_summary.md` - tree, stack note, Layer 7 (files, status, security study notes), Current Status, Running It Locally (env vars + `pytest`), Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Implemented the security primitives auth endpoints will call, so no route has to hand-roll hashing, JWT or emailed tokens. Access vs refresh type checking prevents wrong-role reuse; email tokens are high-entropy random values and only their SHA-256 hash is stored.
+- **New commands / env variables / endpoints / migrations:**
+  - New env vars: `VERIFY_TOKEN_EXPIRE_HOURS` (default 24), `RESET_TOKEN_EXPIRE_MINUTES` (default 30). No new env var for expiry values beyond these.
+  - New test command: `python -m pytest tests/ -q` (18 passed).
+  - No new dependencies (argon2-cffi and PyJWT already pinned), no endpoints, no migrations.
+- **Known issues / TODOs:** No endpoints consume these helpers yet; `decode_token` distinguishes errors only via message (single `TokenError` type). Feature routers (`app/features/*`) remain empty.
+
+---
+
+## Step 1G-a - Email service + core auth endpoints
+
+- **Date:** 2026-10-10
+- **Files created:**
+  - `backend/app/core/email.py` - `send_email()` (SMTP via `SMTP_*`/`EMAIL_FROM`; when `SMTP_HOST` is empty it logs the message to the console instead of sending), `verification_link()` (builds `FRONTEND_URL` + `/verify-email?token=`), and `send_verification_email()`.
+  - `backend/app/features/auth/dependencies.py` - `get_current_user` dependency: reads `Authorization: Bearer <access_token>`, decodes it as an access token, loads the `User`, else 401 `"Not authenticated"`. Reusable by future protected routers (repos).
+  - `backend/app/features/auth/router.py` - `APIRouter(prefix="/auth")` with `POST /signup` (201), `POST /verify-email`, `POST /resend-verification`, `POST /login`, `GET /me`.
+  - `backend/tests/test_auth.py` - 18 tests covering signup (create/duplicate/weak password/email normalization), verify-email (success/invalid/expired/used), resend-verification (generic response, invalidates old token, skips verified), login (blocked while unverified, success returns tokens, wrong password, unknown email), and `/me` (missing token, valid token, refresh token rejected).
+- **Files modified:**
+  - `backend/app/main.py` - imports and registers the auth router with `app.include_router(auth_router)` inside `create_app()`.
+  - `backend/tests/conftest.py` - rewrote to point `DATABASE_URL` at a temp SQLite file, set `FRONTEND_URL`/`SMTP_HOST` for tests, added session-scoped schema create/drop, per-test table cleanup, and `client`, `db_session`, `sent_emails` fixtures. Existing test env vars kept.
+  - `docs/project_summary.md` - intro, project tree, stack note, Layer 7 (files, status, new study notes for the auth router, `get_current_user`, and the email service), The Full Flow (new auth request flow + diagrams), Current Status, Running It Locally (auth endpoints + console email fallback + test commands), Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Built the first working feature on top of the schema/security layers: users can sign up (unverified), receive a single-use expiring verification link, verify, log in for a JWT access/refresh pair, and fetch themselves via `/auth/me`. The email service falls back to logging the message (including the verification link) when SMTP is not configured so the flow is fully usable locally without a mail server. Email addresses are normalized to lowercase; login returns an identical 401 for unknown email and wrong password, and resend-verification returns the same 200 body regardless of whether the account exists (no enumeration). Token/response shapes match `docs/api_contract.md` and `docs/mock_responses.md` (no doc changes needed).
+- **New commands / env variables / endpoints / migrations:**
+  - New endpoints: `POST /auth/signup`, `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/login`, `GET /auth/me`.
+  - No new env variables (reuses `FRONTEND_URL`, `SMTP_*`, `EMAIL_FROM`), no new dependencies, no new migrations.
+  - Test command unchanged: `python -m pytest tests/ -q` (now 36 passed: 18 security + 18 auth).
+- **Known issues / TODOs (deferred to later steps, not this one):**
+  - Rate limiting (HTTP 429) on signup/login/resend is not implemented yet (slowapi is pinned but unused).
+  - Still contract-only: `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`.
+  - If sending the verification email raises, signup/resend log the error and still succeed (user can resend); there is no retry/queue.
+  - `get_current_user` returns any authenticated user; there is no separate "must be verified" dependency yet (not needed for the current endpoints).
+
+---
+
+## Step 1G-b - Remaining auth endpoints + rate limiting
+
+- **Date:** 2026-10-10
+- **Files created:**
+  - `backend/app/core/ratelimit.py` - a slowapi `Limiter(key_func=get_remote_address)` shared by `main.py` and the auth router. slowapi was already pinned in `requirements.txt`, so no new dependency was added.
+- **Files modified:**
+  - `backend/app/features/auth/router.py` - added `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`; added `@limiter.limit(lambda: get_settings().RATE_LIMIT_*)` decorators (and a `request: Request` param) to signup, login, resend-verification and forgot-password. `refresh` decodes the token as a refresh token (`decode_token(..., TokenType.REFRESH)` rejects access tokens) and re-checks the user exists and is verified. `forgot-password` always returns the same message and only for an existing user creates a single-use `RESET` token and queues the reset email as a FastAPI `BackgroundTask` (so the response time does not reveal whether the email exists). `reset-password` validates valid/unexpired/unused `reset` token, applies the schema password rule, re-hashes and stamps `used_at`. `change-password` verifies the current password and rejects reusing the old one. `delete_account` deletes the user, relying on the existing ORM/DB cascade for `email_tokens` and `repos`. Added `_invalidate_active_tokens` (shared by resend + forgot) and `_send_reset_safely`.
+  - `backend/app/core/email.py` - added `reset_link()` and `send_reset_email()` mirroring the verification helpers.
+  - `backend/app/core/config.py` - added `RATE_LIMIT_LOGIN` (5/minute), `RATE_LIMIT_SIGNUP` (10/minute), `RATE_LIMIT_FORGOT_PASSWORD` (5/minute), `RATE_LIMIT_RESEND_VERIFICATION` (5/minute).
+  - `backend/app/main.py` - sets `app.state.limiter = limiter` and registers a `RateLimitExceeded` handler that returns the standard envelope `{"error": {"code": "http_error", "message": "Too many requests"}}` with status 429.
+  - `backend/.env.example` - added the four `RATE_LIMIT_*` variables with a comment.
+  - `backend/tests/conftest.py` - sets the four `RATE_LIMIT_*` env vars to `100000/minute` (relaxed under tests) and added a `sent_reset_emails` fixture that patches `app.features.auth.router.send_reset_email`.
+  - `backend/tests/test_auth.py` - 19 new tests (55 total): refresh success / access-token rejected / invalid / expired; logout with and without auth; forgot-password known vs unknown produce identical 200 bodies; reset success (new password works, old fails) / used token / expired token / invalid token / weak password; change-password success / wrong current / same-as-old / requires auth; delete account then login fails / requires auth; login rate-limit hit returns 429 with the standard envelope.
+  - `docs/api_contract.md` - expanded the Auth notes (refresh token-only, client-side logout, forgot enumeration/timing, reset token failures, change-password same-as-old, account cascade delete, rate limiting + config).
+  - `docs/project_summary.md` - intro, project tree (`core/ratelimit.py`), stack note, Layer 7 (files, status, study notes for the full auth router, email reset helpers, and `core/ratelimit.py`), The Full Flow (auth flow now covers refresh/forgot/reset + limiter), Current Status, Running It Locally (env vars + live endpoints), Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Completed the Part 1 auth surface so a user can refresh sessions, log out, recover a forgotten password, change their password, and delete their account, and added per-IP rate limiting to the abuse-prone endpoints. `forgot-password` is enumeration-safe in both body and timing; reset tokens are single-use and expiring, matching verify tokens. No model or migration changes were needed (reset tokens reuse the existing `email_tokens` table and `EmailTokenType.RESET`).
+- **New commands / env variables / endpoints / migrations:**
+  - New endpoints: `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`.
+  - New env variables: `RATE_LIMIT_LOGIN`, `RATE_LIMIT_SIGNUP`, `RATE_LIMIT_FORGOT_PASSWORD`, `RATE_LIMIT_RESEND_VERIFICATION` (all `N/period` strings).
+  - New dependency: none (slowapi 0.1.10 was already pinned).
+  - No new migrations.
+  - Test command unchanged: `python -m pytest tests/ -q` (now 55 passed: 18 security + 37 auth).
+- **Known issues / TODOs:**
+  - Logout is **client-side only** — there is no token-revocation/denylist table (not in the plan), so an access/refresh token stays valid until it expires even after logout. Clients must discard their tokens.
+  - Rate limiting uses slowapi's in-memory storage, which is per-process; a multi-worker/multi-instance deploy needs a shared backend (e.g. Redis) for accurate global limits.
+  - Reset email is sent in a FastAPI `BackgroundTask`; if it raises, `_send_reset_safely` logs and the request still succeeds (no retry/queue).
+  - Rate limiting is disabled (relaxed) under tests via large `RATE_LIMIT_*` values; the dedicated 429 test lowers the limit and resets the limiter storage.
