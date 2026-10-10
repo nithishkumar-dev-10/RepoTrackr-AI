@@ -39,7 +39,11 @@ RepoTrackr-AI/
 │   │   │   ├── common.py            # ErrorDetail, ErrorResponse, MessageResponse
 │   │   │   ├── auth.py              # Auth request/response schemas + password rule
 │   │   │   └── repo.py              # RepoCreate/RepoOut/RepoListOut + GitHub URL parse
-│   │   ├── security/__init__.py     # Empty — password/JWT helpers
+│   │   ├── security/
+│   │   │   ├── __init__.py          # Re-exports password/JWT/email-token helpers
+│   │   │   ├── passwords.py         # hash_password, verify_password (argon2)
+│   │   │   ├── tokens.py            # JWT access/refresh create + decode_token
+│   │   │   └── email_tokens.py      # verify/reset token generate/hash/expiry
 │   │   ├── features/
 │   │   │   ├── __init__.py          # Empty package marker
 │   │   │   ├── auth/__init__.py     # Empty — signup/login/verify endpoints
@@ -68,7 +72,10 @@ RepoTrackr-AI/
 │   │   │   └── router/__init__.py        # Empty — model routing
 │   │   ├── agent/__init__.py        # Empty — AI agent/tool loop
 │   │   └── tasks/__init__.py        # Empty — background jobs
-│   └── tests/__init__.py            # Empty test package
+│   └── tests/
+│       ├── __init__.py              # Test package marker
+│       ├── conftest.py              # Sets test env vars (SECRET_KEY, token lifetimes)
+│       └── test_security.py         # Security unit tests
 ├── docker/
 │   └── docker-compose.yml           # Empty; no Dockerfile yet
 ├── docs/
@@ -92,7 +99,7 @@ RepoTrackr-AI/
 ## The Stack at a Glance
 Settings -> Database Core -> Data Models -> Schema Migrations (Alembic) -> Pipeline & Analysis -> AI Layer -> Features & HTTP API -> Frontend, with Docker/Evals/Scripts as supporting tooling.
 
-(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, and the Pydantic schemas plus the endpoint/mock contract. The feature routers, `security` helpers and everything above are an empty folder skeleton.)
+(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, the Pydantic schemas, the endpoint/mock contract, and the `security` helpers (password hashing, JWT, email tokens), plus the first unit tests. The feature routers and everything above are an empty folder skeleton.)
 
 ## Layer by Layer
 
@@ -404,11 +411,11 @@ Reserved for the loop where the model calls tools over retrieved evidence.
 
 **What it is:** The folder skeleton for the FastAPI application: the app object, request/response schemas, security helpers, and the per-feature route modules.
 **Why it exists:** It is the top edge the outside world talks to; keeping endpoints grouped by feature keeps routing readable as the app grows.
-**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, and `GET /health`), `backend/app/schemas/{__init__,common,auth,repo}.py` (the Pydantic request/response models), `backend/app/security/__init__.py`, and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
+**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, and `GET /health`), `backend/app/schemas/{__init__,common,auth,repo}.py` (the Pydantic request/response models), `backend/app/security/{__init__,passwords,tokens,email_tokens}.py` (password hashing, JWT, email-token helpers), and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
 **Depends on:** Layers 1–4 (config, DB, models, migrations) and, once built, Layers 5–6.
 **Used by:** the frontend and any external client.
 
-*Partially built. `main.py` defines the app and `GET /health`, and `schemas/` defines all Part 1 request/response models plus the documented endpoint contract. Every feature router and `security` is still an empty `__init__.py`.*
+*Partially built. `main.py` defines the app and `GET /health`, `schemas/` defines all Part 1 models plus the documented contract, and `security/` implements password hashing, JWT and email-token helpers. Every feature router is still an empty `__init__.py`.*
 
 #### Study Notes for this layer
 
@@ -509,10 +516,34 @@ It takes only `url`, validates it is a public `github.com/owner/name` URL (accep
 *Think of it as:* the display card for a repo, and a folder that holds the cards.
 
 **What is `security`?**
-Reserved for password hashing and JWT helpers.
-*Why do we need it?* `requirements.txt` already includes `argon2-cffi` and `PyJWT` for this.
-*What breaks without it?* Auth endpoints would have no safe hashing/token logic.
-*Think of it as:* the vault where keys are made and checked.
+The security helpers: `passwords.py` (`hash_password`, `verify_password` via argon2), `tokens.py` (`create_access_token`, `create_refresh_token`, `decode_token` via PyJWT), and `email_tokens.py` (`generate_email_token`, `hash_token`, `expires_at`, `is_expired`, `is_used`), re-exported from `__init__.py`.
+*Why do we need it?* Auth endpoints need safe password hashing, short-lived access/refresh JWTs, and single-use emailed tokens — all in one tested place rather than inline in routes.
+*What breaks without it?* Auth logic would be duplicated and error-prone, and tokens/passwords could be handled unsafely.
+*Think of it as:* the vault where keys are made, checked and revoked.
+
+**What is `hash_password` / `verify_password`?**
+`hash_password` returns an argon2 encoded hash (never the plain password); `verify_password` re-hashes and compares, returning `False` on mismatch or a malformed hash instead of raising.
+*Why do we need it?* Passwords are never stored or logged in plain text.
+*What breaks without it?* Passwords would be stored insecurely or verification would throw on bad input.
+*Think of it as:* a one-way stamp you can check but never read back.
+
+**What is `create_access_token` / `create_refresh_token` / `decode_token`?**
+JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a short `exp`; refresh tokens carry `type="refresh"` and a longer `exp`. `decode_token(token, expected_type)` verifies the signature and expiry and enforces the type, raising `TokenError` otherwise.
+*Why do we need it?* An access token must not be usable as a refresh token (or vice versa); type checking prevents that.
+*What breaks without it?* A stolen/refreshed token could be replayed in the wrong role.
+*Think of it as:* two differently-colored wristbands — valid only for their own door.
+
+**What are the email-token helpers?**
+`generate_email_token()` returns `(raw_token, token_hash)` using `secrets.token_urlsafe`; only `token_hash` (SHA-256 hex) is stored in `email_tokens`. `expires_at(type)` gives the lifetime (verify: `VERIFY_TOKEN_EXPIRE_HOURS`, reset: `RESET_TOKEN_EXPIRE_MINUTES`); `is_expired`/`is_used` check the stored timestamps.
+*Why do we need it?* Verification and reset links must be single-use and time-limited, and the DB must never hold the raw link token.
+*What breaks without it?* Links would be long-lived/reusable, and a DB leak would expose working links.
+*Think of it as:* a numbered claim ticket — the stub is checked against the stored copy and expires.
+
+**What are `TokenType` and `TokenError`?**
+`TokenType` is the `access`/`refresh` enum embedded in each JWT; `TokenError` is the single exception `decode_token` raises for expired, tampered, wrong-secret, or wrong-type tokens.
+*Why do we need it?* Callers get one predictable error type from `decode_token`.
+*What breaks without it?* Every caller would have to catch several PyJWT exception classes.
+*Think of it as:* one error siren for all bad-token cases.
 
 ---
 
@@ -628,16 +659,17 @@ Working now (built and previously verified, see `docs/changes.md`):
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and the first migration creating `users`, `email_tokens`, `repos`.
 - HTTP API app factory (`app/main.py`): `create_app()`, CORS from `CORS_ORIGINS`, global JSON error handlers, and `GET /health`; runnable via `uvicorn app.main:app`.
 - Request/response schemas (`app/schemas/{common,auth,repo}.py`) and the documented endpoint/mock contract (`docs/api_contract.md`, `docs/mock_responses.md`).
+- Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing, JWT access/refresh with type-checked `decode_token`, and verify/reset email-token helpers.
+- Security unit tests (`backend/tests/test_security.py`, `backend/tests/conftest.py`).
 
 Not implemented yet:
-- Security helpers (`app/security`) — password hashing and JWT.
 - All feature routers (`app/features/*`: auth, repos, plan, indexing, context, reader).
 - Deterministic pipeline and analysis (`app/pipeline/*`, `app/analysis/*`), background tasks (`app/tasks`).
 - AI layer (`app/ai/*`, `app/agent`).
 - Frontend (`frontend/` — `.gitkeep` only).
 - Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile).
 - Evals (`evals/*` — `.gitkeep` only) and helper scripts (`scripts/` — `.gitkeep` only).
-- Tests (`backend/tests` — empty package).
+- More tests (`backend/tests/` — only `test_security.py` exists so far).
 - `README.md` (empty).
 
 ## Running It Locally
@@ -658,7 +690,7 @@ Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
 - Required: `SECRET_KEY` (no default). Generate one with:
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`
-- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`.
+- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `VERIFY_TOKEN_EXPIRE_HOURS`, `RESET_TOKEN_EXPIRE_MINUTES`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`.
 
 Create/verify the database (from `backend/`):
 ```bash
@@ -679,10 +711,16 @@ curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
 ```
 `GET /health` answers as long as the app imports; the other routes (auth, repos, etc.) are not built yet, so unknown paths return the `http_error` JSON shape.
 
+Run the tests (from `backend/`, venv active):
+```bash
+python -m pytest tests/ -q             # all tests
+python -m pytest tests/test_security.py -q
+```
+
 ## Where You Can Help
 
 - **Layer 7, `app/main.py`:** the app factory now exists — extend it by including the `features/*` routers (and any extra middleware) as they are built.
-- **Layer 7, `app/security/`:** implement password hashing with `argon2-cffi` and JWT creation/validation with `PyJWT`, using `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`.
+- **Layer 7, `app/security/`:** helpers exist and are tested — extend them (e.g. token rehash checks) as auth needs grow.
 - **Layer 7, `app/schemas/`:** schemas for Part 1 exist — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`) when new endpoints are added.
 - **Layer 7, `app/features/auth/`:** wire the existing `User` and `EmailToken` models into signup/login/verify/reset endpoints, using `SMTP_*`/`EMAIL_FROM` for sending.
 - **Layer 7, `app/features/repos/`:** add "add repo" and "list my repos" endpoints that write `Repo` rows (respect the `uq_user_repo_url` constraint) and use `get_db()`.
@@ -690,7 +728,7 @@ curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
 - **Layer 5, `app/pipeline/clone` + `cache`:** start the cloning/caching step that turns a `Repo` row into local files.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
 - **Layer 9:** fill `docker/docker-compose.yml` and add a Dockerfile; stand up the `evals/` harnesses.
-- **Tests:** add the first pytest cases under `backend/tests` (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down).
+- **Tests:** `backend/tests/test_security.py` is the first suite — add more (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down).
 
 ## How To Contribute
 

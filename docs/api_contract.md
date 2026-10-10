@@ -141,7 +141,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 |---|---|---|
 | `SignupRequest` | `auth.py` | `email`, `password` |
 | `LoginRequest` | `auth.py` | `email`, `password` |
-| `TokenResponse` | `auth.py` | `access_token`, `refresh_token` |
+| `TokenResponse` | `auth.py` | `access_token`, `refresh_token`, `token_type` (`"bearer"`) |
 | `RefreshRequest` | `auth.py` | `refresh_token` |
 | `VerifyEmailRequest` | `auth.py` | `token` |
 | `ResendVerificationRequest` | `auth.py` | `email` |

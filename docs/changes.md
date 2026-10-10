@@ -153,3 +153,28 @@ Every step appends an entry here. Never delete old entries.
   - None. No new env variables, dependencies, or migrations. Endpoints listed in `docs/api_contract.md` are contract-only (not implemented in code yet).
 - **Assumptions made (changeable):** password = min 8, at least one letter and one digit; `TokenResponse` is `access_token` + `refresh_token` (auth uses `Authorization: Bearer <access_token>`); `RepoListOut` wraps `{"repos": [...]}`; `RepoCreate` accepts only `url` and derives `owner`/`name`; Parts 2-4 stubs return HTTP 501 with `{"status": "not_implemented"}`.
 - **Known issues / TODOs:** No endpoint uses the schemas yet. `app/security` (hashing/JWT) and all `app/features/*` routers are still empty; wiring these schemas into routers is future work.
+
+---
+
+## Step 1F - Security utilities
+
+- **Date:** 2026-10-10
+- **Files created / modified:**
+  - `backend/app/security/passwords.py` - `hash_password()` (argon2 encoded hash) and `verify_password()` (constant-time check returning `False` on mismatch/malformed hash).
+  - `backend/app/security/tokens.py` - `TokenType` (`access`/`refresh`), `TokenError`, `create_access_token()`, `create_refresh_token()`, `decode_token(token, expected_type)`; HS256 signed with `SECRET_KEY`, verifies signature + expiry + type.
+  - `backend/app/security/email_tokens.py` - `generate_email_token()` (returns raw + SHA-256 hash), `hash_token()`, `expires_at(type)` (verify vs reset lifetimes), `is_expired()`, `is_used()`.
+  - `backend/app/security/__init__.py` - re-exports the public security API.
+  - `backend/app/core/config.py` - added `VERIFY_TOKEN_EXPIRE_HOURS=24` and `RESET_TOKEN_EXPIRE_MINUTES=30`; `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS` already existed.
+  - `backend/.env.example` - added the two new variables.
+  - `backend/app/schemas/auth.py` - small change: `TokenResponse.token_type: str = "bearer"`.
+  - `backend/tests/conftest.py` - sets deterministic test env vars before app imports.
+  - `backend/tests/test_security.py` - 18 tests covering hashing, JWT roundtrip, access/refresh mix-up rejection, expired/tampered/wrong-secret rejection, and email-token hash/expiry/used checks.
+  - `docs/api_contract.md`, `docs/mock_responses.md` - `token_type` added to `TokenResponse` docs/examples.
+  - `docs/project_summary.md` - tree, stack note, Layer 7 (files, status, security study notes), Current Status, Running It Locally (env vars + `pytest`), Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Implemented the security primitives auth endpoints will call, so no route has to hand-roll hashing, JWT or emailed tokens. Access vs refresh type checking prevents wrong-role reuse; email tokens are high-entropy random values and only their SHA-256 hash is stored.
+- **New commands / env variables / endpoints / migrations:**
+  - New env vars: `VERIFY_TOKEN_EXPIRE_HOURS` (default 24), `RESET_TOKEN_EXPIRE_MINUTES` (default 30). No new env var for expiry values beyond these.
+  - New test command: `python -m pytest tests/ -q` (18 passed).
+  - No new dependencies (argon2-cffi and PyJWT already pinned), no endpoints, no migrations.
+- **Known issues / TODOs:** No endpoints consume these helpers yet; `decode_token` distinguishes errors only via message (single `TokenError` type). Feature routers (`app/features/*`) remain empty.
