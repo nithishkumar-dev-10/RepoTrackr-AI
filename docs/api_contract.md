@@ -49,7 +49,7 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 
 ### Repo URL rule (schema `repo.py`)
 
-`RepoCreate.url` must be a public GitHub URL of the form `github.com/owner/name`. Accepted: with/without scheme, `www.`, trailing slash, and `.git` suffix. It is normalized to `https://github.com/owner/name`; `owner` and `name` are derived (not sent by the client).
+`RepoCreate.url` must be a public GitHub URL of the form `github.com/owner/name`. Accepted: with/without scheme, `www.`, trailing slash, and `.git` suffix. It is normalized to `https://github.com/owner/name`; `owner` and `name` are derived (not sent by the client). Because GitHub is case-insensitive, `owner`, `name` and `url` are stored lowercased.
 
 ---
 
@@ -93,8 +93,11 @@ Notes:
 | DELETE | `/repos/{repo_id}` | yes | — | 200 `MessageResponse` | 401, 404 |
 
 Notes:
-- 409 on `POST /repos` when the user already added that URL (`uq_user_repo_url`).
-- New repos get `status = "added"`.
+- All `/repos` endpoints require `Authorization: Bearer <access_token>`; without it they return 401.
+- 409 on `POST /repos` when the same user already added that repo. The check is **case-insensitive** (owner/name/url are lowercased before storing, so `github.com/PSF/Requests` and `github.com/psf/requests` collide).
+- New repos get `status = "added"`. This is format validation only — no network call to GitHub and no cloning (that is Part 2).
+- `GET /repos` returns only the caller's repos, newest first.
+- `GET /repos/{repo_id}` and `DELETE /repos/{repo_id}` only match a repo owned by the caller. A repo owned by another user and a repo that does not exist both return the same 404 `"Repo not found"`, so ids cannot be probed.
 
 ---
 

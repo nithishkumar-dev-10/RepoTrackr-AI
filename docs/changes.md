@@ -235,3 +235,28 @@ Every step appends an entry here. Never delete old entries.
   - Rate limiting uses slowapi's in-memory storage, which is per-process; a multi-worker/multi-instance deploy needs a shared backend (e.g. Redis) for accurate global limits.
   - Reset email is sent in a FastAPI `BackgroundTask`; if it raises, `_send_reset_safely` logs and the request still succeeds (no retry/queue).
   - Rate limiting is disabled (relaxed) under tests via large `RATE_LIMIT_*` values; the dedicated 429 test lowers the limit and resets the limiter storage.
+
+---
+
+## Step 1H - Repo CRUD
+
+- **Date:** 2026-10-10
+- **Files created:**
+  - `backend/app/features/repos/router.py` - the repo-records feature on an `APIRouter(prefix="/repos", tags=["repos"])`: `POST /repos` (201 `RepoOut`), `GET /repos` (200 `RepoListOut`, newest first), `GET /repos/{repo_id}` (200 `RepoOut`), `DELETE /repos/{repo_id}` (200 `MessageResponse`). Every route depends on `features/auth/dependencies.get_current_user`. `create_repo` re-parses the URL with `parse_github_url`, lowercases `owner`/`name`/`url`, checks for a duplicate and also catches `IntegrityError` from `uq_user_repo_url` (both 409 `"Repo already added"`), and inserts `Repo(status="added")`. `get`/`delete` query by `id` **and** `user_id`, so a missing repo and another user's repo both return the same 404 `"Repo not found"`. No network call and no cloning.
+  - `backend/tests/test_repos.py` - 19 endpoint tests.
+- **Files modified:**
+  - `backend/app/main.py` - imports and `app.include_router(repos_router)` so `/repos` is mounted.
+  - `docs/api_contract.md` - `Repo URL rule` now notes owner/name/url are stored lowercased; expanded the Repos Notes (auth required on all routes, case-insensitive 409, format-only validation/no clone, list scoping/newest-first, ownership-scoped 404s).
+  - `docs/project_summary.md` - intro, tree (`features/repos/router.py`, `tests/test_repos.py`), stack note, Layer 7 (files, status, new study notes for the repos feature and its router), The Full Flow (HTTP flow mounts both routers + new "Repos request flow" section), Current Status, Running It Locally (live `/repos` endpoints + `test_repos.py`), Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Built the "save a repo link" half of Part 1 with no pipeline or AI. Reused `parse_github_url` (Step 1E) and `get_current_user` (Step 1G-a). To make the existing `uq_user_repo_url` constraint block duplicates **case-insensitively** (GitHub is case-insensitive) with **no model or migration change**, `owner`, `name` and `url` are lowercased on write, so `github.com/PSF/Requests` and `github.com/psf/requests` collide. Ownership is enforced by scoping `get`/`delete` to `user_id`, which makes a foreign repo and a nonexistent repo return an identical 404 (no id probing).
+- **New commands / env variables / endpoints / migrations:**
+  - New endpoints: `POST /repos`, `GET /repos`, `GET /repos/{repo_id}`, `DELETE /repos/{repo_id}` (all require a Bearer access token).
+  - New env variables: none. New dependencies: none.
+  - No new migrations.
+  - Test command unchanged: `python -m pytest tests/ -q` (now 74 passed: 18 security + 37 auth + 19 repos).
+- **Known issues / TODOs:**
+  - Case-insensitive duplicates are enforced by lowercasing on write plus the existing `uq_user_repo_url`. There is no functional index on `lower(url)`; the raw constraint is case-sensitive, so every write must go through this router.
+  - New repos stay at `status = "added"`; the `added -> queued -> cloning -> indexing -> ready/failed` flow is Part 2.
+  - `GET /repos` returns the full list with no pagination (fine for Part 1).
+  - The 409 path does a pre-check query and also relies on the DB constraint as a race guard; under SQLite concurrent inserts are serialized, but a Postgres deploy would still rely on the unique constraint.

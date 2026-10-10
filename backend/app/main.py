@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import get_settings
 from app.core.ratelimit import limiter
 from app.features.auth.router import router as auth_router
+from app.features.repos.router import router as repos_router
 
 logger = logging.getLogger("app")
 
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(auth_router)
+    app.include_router(repos_router)
 
     return app
 
