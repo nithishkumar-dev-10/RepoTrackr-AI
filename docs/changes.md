@@ -133,3 +133,23 @@ Every step appends an entry here. Never delete old entries.
   - `GET /health` - returns `{"status": "ok"}`
   - No new env variables (reuses `CORS_ORIGINS`, `APP_NAME`), no new dependencies, no new migrations.
 - **Known issues / TODOs:** No feature routers are registered yet, so only `/health` answers; unknown paths return the `http_error` shape. `app/schemas`, `app/security` and `app/features/*` are still empty. Request-validation error handling is wired but cannot be exercised by a real endpoint until schemas/routers exist.
+
+---
+
+## Step 1E - Pydantic schemas + API contract
+
+- **Date:** 2026-10-10
+- **Files created / modified:**
+  - `backend/app/schemas/common.py` - `ErrorDetail`, `ErrorResponse` (mirrors the `main.py` error envelope), `MessageResponse`.
+  - `backend/app/schemas/auth.py` - `SignupRequest`, `LoginRequest`, `TokenResponse`, `RefreshRequest`, `VerifyEmailRequest`, `ResendVerificationRequest`, `ForgotPasswordRequest`, `ResetPasswordRequest`, `ChangePasswordRequest`, `UserOut`, plus `PASSWORD_MIN_LENGTH` and `validate_password_strength()`.
+  - `backend/app/schemas/repo.py` - `RepoCreate` (validates/normalizes a public `github.com/owner/name` URL, exposes parsed `owner`/`name`), `RepoOut` (`from_attributes=True`), `RepoListOut` (`{"repos": [...]}`), plus `parse_github_url()`.
+  - `backend/app/schemas/__init__.py` - re-exports every public schema (matches the `models/__init__.py` convention).
+  - `docs/api_contract.md` - full endpoint contract for Parts 1-4: method, path, auth, request schema, success schema, error codes; conventions, error-code table, password rule, repo URL rule, schema index.
+  - `docs/mock_responses.md` - success and error JSON examples for every Part 1 endpoint plus the Parts 2-4 `not_implemented` stub body.
+  - `docs/project_summary.md` - updated the tree, stack note, Layer 7 (files, status, schemas study notes), Current Status, and Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Defined the whole Part 1 request/response contract as typed Pydantic models before any endpoint logic, so the frontend team can build and mock against a stable contract and validation rules (password strength, GitHub URL, email) are enforced in one place. Documented every endpoint for Parts 1-4 and marked Parts 2-4 as `not_implemented`. No models, migrations, endpoints or auth logic were touched.
+- **New commands / env variables / endpoints / migrations:**
+  - None. No new env variables, dependencies, or migrations. Endpoints listed in `docs/api_contract.md` are contract-only (not implemented in code yet).
+- **Assumptions made (changeable):** password = min 8, at least one letter and one digit; `TokenResponse` is `access_token` + `refresh_token` (auth uses `Authorization: Bearer <access_token>`); `RepoListOut` wraps `{"repos": [...]}`; `RepoCreate` accepts only `url` and derives `owner`/`name`; Parts 2-4 stubs return HTTP 501 with `{"status": "not_implemented"}`.
+- **Known issues / TODOs:** No endpoint uses the schemas yet. `app/security` (hashing/JWT) and all `app/features/*` routers are still empty; wiring these schemas into routers is future work.
