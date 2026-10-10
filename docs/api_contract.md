@@ -1,6 +1,6 @@
 # API Contract
 
-The HTTP contract for RepoTrackr AI. **Part 1** endpoints are the current build; **Parts 2–4** endpoints are declared here so the frontend can wire them now but return `{"status": "not_implemented"}` until built.
+The HTTP contract for RepoTrackr AI. **Part 1** endpoints are the current build; **Parts 2–4** endpoints are declared here so the frontend can wire them now — they are registered as stubs that return `501 {"status": "not_implemented"}` until built.
 
 ## Conventions
 
@@ -103,7 +103,7 @@ Notes:
 
 ## Part 2 — Pipeline (not_implemented)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`.
+Stub responses: **501** with body `{"status": "not_implemented"}`. These routes are registered now. Each requires `Authorization: Bearer <access_token>` (401 without it) and verifies the repo belongs to the caller first, so a foreign or missing repo returns the same 404 `"Repo not found"` as the live repo routes.
 
 | Method | Path | Auth | Request | Success (stub) | Errors |
 |---|---|---|---|---|---|
@@ -115,7 +115,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 
 ## Part 3 — AI features (not_implemented)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`.
+Stub responses: **501** with body `{"status": "not_implemented"}` (same auth/404 rules as Part 2). `POST /repos/{repo_id}/plan` accepts a `multipart/form-data` YAML file; `POST /repos/{repo_id}/context` and `POST /repos/{repo_id}/query` accept JSON `{"query": str, "mode": str}`.
 
 | Method | Path | Auth | Request | Success (stub) | Errors |
 |---|---|---|---|---|---|
@@ -129,7 +129,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 
 ## Part 4 — Agent, evals, hardening (not_implemented)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`.
+Stub responses: **501** with body `{"status": "not_implemented"}`. `GET /repos/{repo_id}/agent/trace` follows the Part 2 auth/404 rules; `GET /evals` is public (no auth, no repo).
 
 | Method | Path | Auth | Request | Success (stub) | Errors |
 |---|---|---|---|---|---|
@@ -161,5 +161,6 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 | `RepoCreate` | `repo.py` | `url` (derives `owner`, `name`) |
 | `RepoOut` | `repo.py` | `id`, `url`, `owner`, `name`, `status`, `created_at` |
 | `RepoListOut` | `repo.py` | `repos: RepoOut[]` |
+| `StubQueryRequest` | `stub.py` | `query`, `mode` (Part 3 stub bodies) |
 | `ErrorResponse` | `common.py` | `error: { code, message, details? }` |
 | `MessageResponse` | `common.py` | `message` |

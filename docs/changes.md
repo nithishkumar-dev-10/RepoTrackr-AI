@@ -260,3 +260,45 @@ Every step appends an entry here. Never delete old entries.
   - New repos stay at `status = "added"`; the `added -> queued -> cloning -> indexing -> ready/failed` flow is Part 2.
   - `GET /repos` returns the full list with no pagination (fine for Part 1).
   - The 409 path does a pre-check query and also relies on the DB constraint as a race guard; under SQLite concurrent inserts are serialized, but a Postgres deploy would still rely on the unique constraint.
+
+---
+
+## Step 1I - Part 1 finish: Part 2-4 stubs, README, docs, OpenAPI + Postman
+
+- **Date:** 2026-10-10
+- **Files created:**
+  - `backend/app/features/repos/dependencies.py` - `get_owned_repo` dependency: loads a `Repo` by `id` **and** `user_id` (via `get_current_user` + `get_db`), else 404 `"Repo not found"`. The single source of the ownership-scoped 404 rule, reused by the repos `get`/`delete` routes and every repo-scoped stub.
+  - `backend/app/schemas/stub.py` - `StubQueryRequest` (`query`, `mode`) for the Part 3 stub bodies.
+  - `backend/app/features/indexing/router.py` - stubs `POST /repos/{repo_id}/index`, `GET .../index/status`, `GET .../index/summary` (tag `stubs`).
+  - `backend/app/features/plan/router.py` - stubs `POST /repos/{repo_id}/plan` (multipart YAML file) and `GET /repos/{repo_id}/plan`.
+  - `backend/app/features/reader/router.py` - stub `GET /repos/{repo_id}/reader`.
+  - `backend/app/features/context/router.py` - stubs `POST /repos/{repo_id}/context` and `POST /repos/{repo_id}/query` (JSON `StubQueryRequest`).
+  - `backend/app/agent/router.py` - stub `GET /repos/{repo_id}/agent/trace`.
+  - `backend/tests/test_stubs.py` - 29 tests (per repo-scoped stub: 501 happy path, 401 without token, 404 for another user's repo; plus a nonexistent-repo 404 and the public `/evals` stub).
+  - `docs/openapi.json` - generated OpenAPI 3.1 spec (23 paths).
+  - `docs/postman_collection.json` - Postman v2.1 collection generated from the spec with `openapi-to-postmanv2` (`folderStrategy=Tags`), then given `baseUrl`/`bearerToken` collection variables and a Login test script that saves `access_token` into `{{bearerToken}}`.
+- **Files modified:**
+  - `README.md` - written from scratch: what the project is, design rule, tech stack, Part 1 status, setup from scratch (venv, pip install, copy `.env.example`, `alembic upgrade head`), run (`python -m uvicorn app.main:app --reload`), tests, folder structure, and links to `docs/api_contract.md` / `docs/mock_responses.md` / `docs/openapi.json` / `docs/postman_collection.json`.
+  - `backend/app/main.py` - imports and mounts the five stub routers and declares `GET /evals` (tag `stubs`, 501, no auth).
+  - `backend/app/features/repos/router.py` - `get`/`delete` now depend on `get_owned_repo` (same behavior, less duplication).
+  - `backend/app/schemas/__init__.py` - export `StubQueryRequest`.
+  - `docs/api_contract.md` - intro notes the stubs are registered; each Part 2/3/4 section documents the shared 401/404 behavior and the plan/context/query request bodies; schema index gains `StubQueryRequest`.
+  - `docs/project_summary.md` - intro, tree (all new files), stack note, Layer 6 (`agent/router.py`), Layer 7 (files, status, study notes for the repos dependency and each stub feature, stub request flow), Current Status, Running It Locally (Swagger/OpenAPI + `/repos` live + stubs 501), Where You Can Help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Closed out Part 1's backend. Every Part 2–4 endpoint from the contract is now registered as a `501` stub that enforces auth and repo ownership, so the frontend can integrate against realistic behavior now. Added the top-level README, exported the OpenAPI spec, generated a usable Postman collection, and verified the env template and git ignores. No model, migration, dependency or `.env.example` changes were needed.
+- **New commands / env variables / endpoints / migrations:**
+  - New endpoints (all stubs, `501 {"status": "not_implemented"}`): `POST /repos/{repo_id}/index`, `GET /repos/{repo_id}/index/status`, `GET /repos/{repo_id}/index/summary`, `POST /repos/{repo_id}/plan`, `GET /repos/{repo_id}/plan`, `GET /repos/{repo_id}/reader`, `POST /repos/{repo_id}/context`, `POST /repos/{repo_id}/query`, `GET /repos/{repo_id}/agent/trace`, `GET /evals`.
+  - New env variables / dependencies / migrations: none.
+  - New docs artifacts: `docs/openapi.json`, `docs/postman_collection.json` (generated with `npx openapi-to-postmanv2`, not a runtime dependency).
+  - Test command unchanged: `python -m pytest tests/ -q` (now 103 passed: 18 security + 37 auth + 19 repos + 29 stubs).
+- **Part 1 "Done when" checklist:**
+  - Sign up, verify, log in, reset forgotten password, add/delete repo links - **PASS** (all covered by `test_auth.py` / `test_repos.py`; full suite green).
+  - Open the detail page - **PARTIAL**: the backend supports it (`GET /repos/{repo_id}`), but the frontend pages are the separate team deliverable and `frontend/` is still empty.
+  - Expired, used and invalid tokens handled - **PASS** (`test_auth.py` covers verify + reset token expiry/used/invalid).
+  - Tests pass - **PASS** (103 passed).
+  - README lets a teammate run from scratch - **PASS** (`README.md` written; commands verified against the repo).
+- **Known issues / TODOs:**
+  - Frontend pages (Landing/Signup/Login/Verify/Forgot/Reset/Dashboard/Add Repo/Repo Detail/Account) are not in this repo — owned by the team. "Open the detail page" stays partial until they exist.
+  - Docker Compose (optional) was skipped: no Dockerfile yet and it would be unverified, so it is left empty rather than documented as working.
+  - The Postman collection's sample values are schema placeholders (`<string>`, `<email>`); use `docs/mock_responses.md` for realistic bodies.
+  - Stub request bodies are validated for shape only (`StubQueryRequest`, required plan file); nothing is processed.

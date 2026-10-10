@@ -13,6 +13,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import ErrorDetail, ErrorResponse, MessageResponse
 from app.schemas.repo import RepoCreate, RepoListOut, RepoOut, parse_github_url
+from app.schemas.stub import StubQueryRequest
 
 __all__ = [
     "ChangePasswordRequest",
@@ -28,6 +29,7 @@ __all__ = [
     "ResendVerificationRequest",
     "ResetPasswordRequest",
     "SignupRequest",
+    "StubQueryRequest",
     "TokenResponse",
     "UserOut",
     "VerifyEmailRequest",

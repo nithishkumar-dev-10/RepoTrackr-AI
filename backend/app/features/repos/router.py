@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.features.auth.dependencies import get_current_user
+from app.features.repos.dependencies import get_owned_repo
 from app.models.repo import Repo
 from app.models.user import User
 from app.schemas.common import MessageResponse
@@ -13,7 +14,6 @@ from app.schemas.repo import GITHUB_HOST, RepoCreate, RepoListOut, RepoOut, pars
 router = APIRouter(prefix="/repos", tags=["repos"])
 
 REPO_EXISTS_MESSAGE = "Repo already added"
-REPO_NOT_FOUND_MESSAGE = "Repo not found"
 REPO_DELETED_MESSAGE = "Repo deleted."
 
 
@@ -65,30 +65,15 @@ def list_repos(
 
 
 @router.get("/{repo_id}", response_model=RepoOut)
-def get_repo(
-    repo_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> Repo:
-    repo = db.scalar(
-        select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
-    )
-    if repo is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, REPO_NOT_FOUND_MESSAGE)
+def get_repo(repo: Repo = Depends(get_owned_repo)) -> Repo:
     return repo
 
 
 @router.delete("/{repo_id}", response_model=MessageResponse)
 def delete_repo(
-    repo_id: int,
-    current_user: User = Depends(get_current_user),
+    repo: Repo = Depends(get_owned_repo),
     db: Session = Depends(get_db),
 ) -> MessageResponse:
-    repo = db.scalar(
-        select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
-    )
-    if repo is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, REPO_NOT_FOUND_MESSAGE)
     db.delete(repo)
     db.commit()
     return MessageResponse(message=REPO_DELETED_MESSAGE)
