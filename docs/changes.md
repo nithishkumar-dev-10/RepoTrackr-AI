@@ -116,3 +116,20 @@ Every step appends an entry here. Never delete old entries.
 - **What changed and why:** Removed all part-wise plan (P1-P4), scope lists, cut order, eval tables, and future features from project_summary.md. The file now has exactly 9 sections: What this is, Current state, Folder map, File reference, How it connects, Database, Environment variables, Commands, Gotchas. AGENTS.md Rule 1 now explicitly forbids plan content in project_summary.md and points to RepoTrackr-AI-Execution-Plan.md for roadmap.
 - **New commands / env variables / endpoints / migrations:** none
 - **Known issues / TODOs:** none for this docs-only change.
+
+---
+
+## Step 1D - FastAPI app factory
+
+- **Date:** 2026-10-10
+- **Files created / modified:**
+  - `backend/app/main.py` - implemented the FastAPI app factory: `create_app()` builds the `FastAPI` object, adds `CORSMiddleware` from `Settings.CORS_ORIGINS`, registers three global exception handlers (validation / HTTP / unhandled) all returning `{"error": {"code", "message", "details"?}}`, adds `GET /health`, and assigns module-level `app = create_app()` for uvicorn.
+  - `docs/project_summary.md` - restored as the canonical doc at `docs/` (copied from the current root `project_summary.md`, which was left untouched) and updated Layer 7, the project-structure tree, the stack note, The Full Flow (new HTTP request flow), Current Status, Running It Locally, and Where You Can Help.
+  - `docs/changes.md` - this entry.
+  - `docs/RepoTrackr-AI-Execution-Plan.md` - restored from git history (commit `40e23e0`, where it last existed) per instruction; not edited. Also confirmed via `alembic upgrade head` that tables `users`, `email_tokens`, `repos` exist (plus `alembic_version`).
+- **What changed and why:** Built the top edge of the API so there is now an importable ASGI app. Errors are normalized to one JSON shape for every failure mode, CORS origins come from `.env` via the existing `CORS_ORIGINS` setting, and `GET /health` gives a liveness probe. No models, migrations, auth or schemas were touched.
+- **New commands / env variables / endpoints / migrations:**
+  - `uvicorn app.main:app --reload` - serves the app on `http://127.0.0.1:8000`
+  - `GET /health` - returns `{"status": "ok"}`
+  - No new env variables (reuses `CORS_ORIGINS`, `APP_NAME`), no new dependencies, no new migrations.
+- **Known issues / TODOs:** No feature routers are registered yet, so only `/health` answers; unknown paths return the `http_error` shape. `app/schemas`, `app/security` and `app/features/*` are still empty. Request-validation error handling is wired but cannot be exercised by a real endpoint until schemas/routers exist.
