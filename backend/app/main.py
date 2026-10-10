@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,9 +8,15 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.agent.router import router as agent_router
 from app.core.config import get_settings
 from app.core.ratelimit import limiter
 from app.features.auth.router import router as auth_router
+from app.features.context.router import router as context_router
+from app.features.indexing.router import router as indexing_router
+from app.features.plan.router import router as plan_router
+from app.features.reader.router import router as reader_router
+from app.features.repos.router import router as repos_router
 
 logger = logging.getLogger("app")
 
@@ -85,7 +91,17 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    @app.get("/evals", tags=["stubs"], status_code=status.HTTP_501_NOT_IMPLEMENTED)
+    async def evals_stub() -> dict[str, str]:
+        return {"status": "not_implemented"}
+
     app.include_router(auth_router)
+    app.include_router(repos_router)
+    app.include_router(indexing_router)
+    app.include_router(plan_router)
+    app.include_router(reader_router)
+    app.include_router(context_router)
+    app.include_router(agent_router)
 
     return app
 

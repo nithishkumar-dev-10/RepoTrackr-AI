@@ -1,6 +1,6 @@
 # API Contract
 
-The HTTP contract for RepoTrackr AI. **Part 1** endpoints are the current build; **Parts 2–4** endpoints are declared here so the frontend can wire them now but return `{"status": "not_implemented"}` until built.
+The HTTP contract for RepoTrackr AI. **Part 1** endpoints are the current build; **Parts 2–4** endpoints are declared here so the frontend can wire them now — they are registered as stubs that return `501 {"status": "not_implemented"}` until built.
 
 ## Conventions
 
@@ -49,7 +49,7 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 
 ### Repo URL rule (schema `repo.py`)
 
-`RepoCreate.url` must be a public GitHub URL of the form `github.com/owner/name`. Accepted: with/without scheme, `www.`, trailing slash, and `.git` suffix. It is normalized to `https://github.com/owner/name`; `owner` and `name` are derived (not sent by the client).
+`RepoCreate.url` must be a public GitHub URL of the form `github.com/owner/name`. Accepted: with/without scheme, `www.`, trailing slash, and `.git` suffix. It is normalized to `https://github.com/owner/name`; `owner` and `name` are derived (not sent by the client). Because GitHub is case-insensitive, `owner`, `name` and `url` are stored lowercased.
 
 ---
 
@@ -93,14 +93,17 @@ Notes:
 | DELETE | `/repos/{repo_id}` | yes | — | 200 `MessageResponse` | 401, 404 |
 
 Notes:
-- 409 on `POST /repos` when the user already added that URL (`uq_user_repo_url`).
-- New repos get `status = "added"`.
+- All `/repos` endpoints require `Authorization: Bearer <access_token>`; without it they return 401.
+- 409 on `POST /repos` when the same user already added that repo. The check is **case-insensitive** (owner/name/url are lowercased before storing, so `github.com/PSF/Requests` and `github.com/psf/requests` collide).
+- New repos get `status = "added"`. This is format validation only — no network call to GitHub and no cloning (that is Part 2).
+- `GET /repos` returns only the caller's repos, newest first.
+- `GET /repos/{repo_id}` and `DELETE /repos/{repo_id}` only match a repo owned by the caller. A repo owned by another user and a repo that does not exist both return the same 404 `"Repo not found"`, so ids cannot be probed.
 
 ---
 
 ## Part 2 — Pipeline (not_implemented)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`.
+Stub responses: **501** with body `{"status": "not_implemented"}`. These routes are registered now. Each requires `Authorization: Bearer <access_token>` (401 without it) and verifies the repo belongs to the caller first, so a foreign or missing repo returns the same 404 `"Repo not found"` as the live repo routes.
 
 | Method | Path | Auth | Request | Success (stub) | Errors |
 |---|---|---|---|---|---|
@@ -112,7 +115,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 
 ## Part 3 — AI features (not_implemented)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`.
+Stub responses: **501** with body `{"status": "not_implemented"}` (same auth/404 rules as Part 2). `POST /repos/{repo_id}/plan` accepts a `multipart/form-data` YAML file; `POST /repos/{repo_id}/context` and `POST /repos/{repo_id}/query` accept JSON `{"query": str, "mode": str}`.
 
 | Method | Path | Auth | Request | Success (stub) | Errors |
 |---|---|---|---|---|---|
@@ -126,7 +129,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 
 ## Part 4 — Agent, evals, hardening (not_implemented)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`.
+Stub responses: **501** with body `{"status": "not_implemented"}`. `GET /repos/{repo_id}/agent/trace` follows the Part 2 auth/404 rules; `GET /evals` is public (no auth, no repo).
 
 | Method | Path | Auth | Request | Success (stub) | Errors |
 |---|---|---|---|---|---|
@@ -158,5 +161,6 @@ Stub responses: **501** with body `{"status": "not_implemented"}`.
 | `RepoCreate` | `repo.py` | `url` (derives `owner`, `name`) |
 | `RepoOut` | `repo.py` | `id`, `url`, `owner`, `name`, `status`, `created_at` |
 | `RepoListOut` | `repo.py` | `repos: RepoOut[]` |
+| `StubQueryRequest` | `stub.py` | `query`, `mode` (Part 3 stub bodies) |
 | `ErrorResponse` | `common.py` | `error: { code, message, details? }` |
 | `MessageResponse` | `common.py` | `message` |
