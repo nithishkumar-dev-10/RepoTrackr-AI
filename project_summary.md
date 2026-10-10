@@ -1,7 +1,7 @@
 # Project Summary
 
 ## What This Project Is
-RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. Right now the foundation exists — settings, the database engine, the SQLAlchemy models, the first Alembic migration, and a minimal FastAPI app that serves `GET /health` with CORS and consistent JSON error handling. The pipeline, analysis, AI, feature routers, frontend, Docker and evals folders are all scaffolded but empty.
+RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. Right now only the foundation exists — settings, the database engine, the SQLAlchemy models, and the first Alembic migration. The folders for the pipeline, analysis, AI, HTTP API, frontend, Docker and evals are all scaffolded but empty.
 
 ## Project Structure
 ```
@@ -24,7 +24,7 @@ RepoTrackr-AI/
 │   │       └── 9dbee76d77e4_create_users_email_tokens_repos.py  # First migration
 │   ├── app/
 │   │   ├── __init__.py              # Empty package marker
-│   │   ├── main.py                  # FastAPI app factory: create_app(), CORS, error handlers, GET /health
+│   │   ├── main.py                  # FastAPI app factory — empty, not built
 │   │   ├── core/
 │   │   │   ├── __init__.py          # Empty package marker
 │   │   │   ├── config.py            # Settings class + cached get_settings()
@@ -84,7 +84,7 @@ RepoTrackr-AI/
 ## The Stack at a Glance
 Settings -> Database Core -> Data Models -> Schema Migrations (Alembic) -> Pipeline & Analysis -> AI Layer -> Features & HTTP API -> Frontend, with Docker/Evals/Scripts as supporting tooling.
 
-(Layers 1–4 are fully built, and Layer 7 has its app factory plus `GET /health`. Everything above that is an empty folder skeleton.)
+(Only the first four layers below actually have code. Everything above is an empty folder skeleton.)
 
 ## Layer by Layer
 
@@ -396,43 +396,19 @@ Reserved for the loop where the model calls tools over retrieved evidence.
 
 **What it is:** The folder skeleton for the FastAPI application: the app object, request/response schemas, security helpers, and the per-feature route modules.
 **Why it exists:** It is the top edge the outside world talks to; keeping endpoints grouped by feature keeps routing readable as the app grows.
-**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, and `GET /health`), `backend/app/schemas/__init__.py`, `backend/app/security/__init__.py`, and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
+**Files in it:** `backend/app/main.py` (app factory — empty), `backend/app/schemas/__init__.py`, `backend/app/security/__init__.py`, and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
 **Depends on:** Layers 1–4 (config, DB, models, migrations) and, once built, Layers 5–6.
 **Used by:** the frontend and any external client.
 
-*Partially built. `main.py` defines the app and `GET /health`; every feature router, plus `schemas` and `security`, is still an empty `__init__.py`.*
+*Not implemented yet. `main.py` is empty (no `app` object), and every feature/`schemas`/`security` file is an empty `__init__.py`.*
 
 #### Study Notes for this layer
 
 **What is `backend/app/main.py`?**
-The FastAPI app factory (`create_app()`) plus the module-level `app = create_app()` that uvicorn imports as `app.main:app`.
-*Why do we need it?* It builds the ASGI application, attaches CORS and error handling, and registers the first route (`GET /health`).
+The intended home of the FastAPI app factory.
+*Why do we need it?* Uvicorn needs an importable ASGI `app` to serve.
 *What breaks without it?* There is no server to run; `uvicorn app.main:app` cannot start.
-*Think of it as:* the front door of the building — it now exists and opens.
-
-**Why `create_app()` as a factory instead of a bare `app`?**
-It builds and configures a fresh `FastAPI` instance and returns it, with `app = create_app()` at module level for uvicorn.
-*Why do we need it?* Settings, middleware and handlers are applied in one obvious place, and tests can build isolated app instances.
-*What breaks without it?* Configuration would be scattered at import time with no clean seam to build or test the app.
-*Think of it as:* a recipe for assembling the store before opening, rather than a pre-built store you can't rearrange.
-
-**What is the CORS middleware doing here?**
-`add_middleware(CORSMiddleware, ...)` with `allow_origins=settings.CORS_ORIGINS` (plus all methods/headers and credentials).
-*Why do we need it?* The browser frontend is served from a different origin and needs the API to permit it.
-*What breaks without it?* The frontend's requests are blocked by the browser's same-origin policy.
-*Think of it as:* a guest list at the door naming exactly which websites may call in.
-
-**What are the three global exception handlers?**
-Handlers for `RequestValidationError` (422), `StarletteHTTPException` (its status code), and `Exception` (500), all returning `{"error": {"code", "message", "details"?}}`.
-*Why do we need it?* Every error leaves the API in one consistent JSON shape instead of FastAPI's default `{"detail": ...}` or a raw traceback.
-*What breaks without it?* Clients would parse several error formats, and unhandled errors could leak internals (the unhandled handler logs the traceback server-side and returns only a generic message).
-*Think of it as:* a single standardized complaint form every department must use.
-
-**What is `GET /health`?**
-A dependency-free route returning `{"status": "ok"}`.
-*Why do we need it?* Load balancers, uptime checks and the team need a cheap liveness probe.
-*What breaks without it?* You can't tell at a glance whether the process is up.
-*Think of it as:* a doorman answering "yes, we're open" without walking you through the building.
+*Think of it as:* the front door of the building — not built yet.
 
 **What is `features/auth`?**
 Reserved for signup, login, email verification, and password reset endpoints.
@@ -538,7 +514,7 @@ The planned home for one-off helper scripts.
 
 ## The Full Flow
 
-Two things actually run end to end right now: applying the database schema and serving a minimal HTTP API. First, here is exactly what happens when you run `alembic upgrade head` from `backend/` with the venv active:
+Nothing in this repo serves HTTP yet, so the only real end-to-end run is applying the database schema. Here is exactly what happens when you run `alembic upgrade head` from `backend/` with the venv active:
 
 1. **Entry (Layer 4).** The `alembic` CLI reads `backend/alembic.ini`, sees `script_location = %(here)s/alembic`, and loads `backend/alembic/env.py`.
 2. **Wiring (Layer 4 -> 1/2/3).** `env.py` inserts `backend/` into `sys.path`, then imports `get_settings` (Layer 1), `Base` (Layer 2) and `app.models` (Layer 3). Importing `app.models` runs `models/__init__.py`, which imports `User`, `EmailToken`, `EmailTokenType`, and `Repo`, registering all three tables on `Base.metadata`.
@@ -568,24 +544,7 @@ alembic.ini ────────► alembic/env.py
               backend/repotrackr.db  (3 tables + alembic_version)
 ```
 
-### HTTP request flow (app factory)
-
-When uvicorn imports `app.main:app`, the module builds the app and serves a first route:
-
-1. **Startup (Layer 7).** `uvicorn app.main:app` imports `backend/app/main.py`, which calls `create_app()` and assigns `app = create_app()`.
-2. **Config (Layer 1).** `create_app()` calls `get_settings()`, which reads `backend/.env` into the cached `Settings`.
-3. **Middleware + handlers (Layer 7).** It builds the `FastAPI` object, adds `CORSMiddleware` using `settings.CORS_ORIGINS`, and registers the three exception handlers.
-4. **Request (`GET /health`).** The route returns `{"status": "ok"}`.
-5. **Errors.** A validation error returns 422, an HTTP error (e.g. unknown path -> 404) returns its own status code, and any unhandled error returns 500 — all in the same `{"error": {"code", "message", ...}}` shape.
-
-```
-Browser ──GET /health──► uvicorn ──► app/main.py:app
-                                      │ CORS + exception handlers
-                                      ▼
-                                    200 {"status":"ok"}
-```
-
-When the feature routers land, the flow will extend: HTTP request -> `app/main.py` -> a `features/*` router -> `security`/`schemas` -> `get_db()`/`Base` -> database.
+If/when the API is built, the flow will extend upward: HTTP request -> `app/main.py` -> a `features/*` router -> `security`/`schemas` -> `pipeline`/`analysis`/`ai` -> `get_db()`/`Base` -> database.
 
 ## Current Status
 
@@ -594,9 +553,9 @@ Working now (built and previously verified, see `docs/changes.md`):
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and the first migration creating `users`, `email_tokens`, `repos`.
-- HTTP API app factory (`app/main.py`): `create_app()`, CORS from `CORS_ORIGINS`, global JSON error handlers, and `GET /health`; runnable via `uvicorn app.main:app`.
 
 Not implemented yet:
+- HTTP API / FastAPI app factory (`app/main.py` is empty — no `app` object).
 - Request/response schemas (`app/schemas`), security helpers (`app/security`).
 - All feature routers (`app/features/*`: auth, repos, plan, indexing, context, reader).
 - Deterministic pipeline and analysis (`app/pipeline/*`, `app/analysis/*`), background tasks (`app/tasks`).
@@ -639,16 +598,11 @@ How to verify it works:
 - `alembic check` should say there are no new upgrade operations.
 - Sanity-check config: `python -c "from app.core.config import get_settings; print(get_settings().APP_NAME)"`.
 
-Run the API (from `backend/`, venv active):
-```bash
-uvicorn app.main:app --reload        # serves http://127.0.0.1:8000
-curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
-```
-`GET /health` answers as long as the app imports; the other routes (auth, repos, etc.) are not built yet, so unknown paths return the `http_error` JSON shape.
+The web server is **not runnable yet**: `app/main.py` is empty, so there is no `app` object for `uvicorn app.main:app` to import. Don't expect an HTTP endpoint to answer.
 
 ## Where You Can Help
 
-- **Layer 7, `app/main.py`:** the app factory now exists — extend it by including the `features/*` routers (and any extra middleware) as they are built.
+- **Layer 7, `app/main.py`:** build the FastAPI app factory — instantiate `FastAPI`, add CORS using `Settings.CORS_ORIGINS`/`FRONTEND_URL`, and include routers. This unblocks everything else.
 - **Layer 7, `app/security/`:** implement password hashing with `argon2-cffi` and JWT creation/validation with `PyJWT`, using `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`.
 - **Layer 7, `app/schemas/`:** write Pydantic schemas for users, tokens, and repos so ORM models don't leak onto the wire.
 - **Layer 7, `app/features/auth/`:** wire the existing `User` and `EmailToken` models into signup/login/verify/reset endpoints, using `SMTP_*`/`EMAIL_FROM` for sending.
