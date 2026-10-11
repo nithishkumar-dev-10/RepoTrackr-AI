@@ -11,9 +11,9 @@ import { Link, useParams } from 'react-router-dom'
 
 import { buildContext, getGraph, getIndexStatus, queryRepo } from '@/api/galaxy'
 import { getRepo, mapRepoStatus, REPO_STATUS_LABEL } from '@/api/repos'
-import { AnswerView } from '@/components/workspace/AnswerView'
 import { CommandBar } from '@/components/workspace/CommandBar'
 import { GraphView } from '@/components/workspace/GraphView'
+import { ModePanel } from '@/components/workspace/ModePanel'
 import { ModeTabs, type WorkspaceMode } from '@/components/workspace/ModeTabs'
 import { NodeInspector } from '@/components/workspace/NodeInspector'
 import { StageTimeline } from '@/components/workspace/StageTimeline'
@@ -65,7 +65,6 @@ export default function RepoWorkspace() {
   const [loadingMode, setLoadingMode] = useState<WorkspaceMode | null>(null)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [panelWidth, setPanelWidth] = useState(440)
 
   useEffect(() => {
@@ -197,7 +196,6 @@ export default function RepoWorkspace() {
     mode === 'reader' ? results.reader?.response.readingOrder : undefined
 
   function focusFile(file: string) {
-    setSelectedFile(file)
     const match = nodes.find((node) => node.file === file)
     if (match) setSelectedId(match.id)
   }
@@ -315,21 +313,23 @@ export default function RepoWorkspace() {
               <NodeInspector
                 node={selectedNode}
                 neighborCount={adjacency.get(selectedNode.id)?.size ?? 0}
-                onClear={() => {
-                  setSelectedId(null)
-                  setSelectedFile(null)
-                }}
+                onClear={() => setSelectedId(null)}
               />
             </div>
           ) : null}
 
-          <AnswerView
+          <ModePanel
+            mode={mode}
             response={active?.response}
             query={queries[mode]}
             demo={active?.demo}
             loading={loadingMode === mode}
-            selectedFile={selectedFile}
+            nodes={nodes}
+            repoId={repoId}
+            selectedId={selectedId}
+            onSelectNode={setSelectedId}
             onSelectFile={focusFile}
+            onPlanUploaded={() => void runQuery('plan', queries.plan ?? DEFAULT_QUERY.plan)}
           />
         </div>
       </aside>
