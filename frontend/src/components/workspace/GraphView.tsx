@@ -2,6 +2,7 @@ import { Box, List, Loader2, Network } from 'lucide-react'
 import { Suspense, lazy, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { CanvasErrorBoundary } from '@/components/workspace/CanvasErrorBoundary'
 import { Graph2D } from '@/components/workspace/Graph2D'
 import { GraphList } from '@/components/workspace/GraphList'
 import type { ClusterCenter, PositionedNode } from '@/lib/graphLayout'
@@ -102,24 +103,43 @@ export function GraphView({
     )
   } else {
     body = (
-      <Suspense
+      <CanvasErrorBoundary
         fallback={
-          <div className="grid h-full place-items-center text-slate-400">
-            <Loader2 className="size-6 animate-spin" />
+          <div className="h-full w-full p-4">
+            <div className="h-full w-full rounded-xl border border-white/5 bg-slate-950/40">
+              <Graph2D
+                nodes={modules}
+                clusters={clusters}
+                edges={edges}
+                selectedId={selectedId}
+                onSelect={onSelect}
+                highlightIds={highlightIds}
+                nodeStatus={nodeStatus}
+                readingOrder={readingOrder}
+              />
+            </div>
           </div>
         }
       >
-        <Graph3D
-          nodes={modules}
-          clusters={clusters}
-          edges={edges}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          highlightIds={highlightIds}
-          nodeStatus={nodeStatus}
-          readingOrder={readingOrder}
-        />
-      </Suspense>
+        <Suspense
+          fallback={
+            <div className="grid h-full place-items-center text-slate-400">
+              <Loader2 className="size-6 animate-spin" />
+            </div>
+          }
+        >
+          <Graph3D
+            nodes={modules}
+            clusters={clusters}
+            edges={edges}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            highlightIds={highlightIds}
+            nodeStatus={nodeStatus}
+            readingOrder={readingOrder}
+          />
+        </Suspense>
+      </CanvasErrorBoundary>
     )
   }
 

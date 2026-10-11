@@ -1,3 +1,4 @@
+import { addApiLog } from '@/lib/apiLog'
 import { env } from '@/lib/env'
 import {
   clearTokens,
@@ -42,11 +43,19 @@ let refreshPromise: Promise<boolean> | null = null
 async function doRefresh(): Promise<boolean> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) return false
+  const started = performance.now()
   try {
     const res = await fetch(`${env.API_URL}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+    addApiLog({
+      method: 'POST',
+      path: '/auth/refresh',
+      status: res.status,
+      ok: res.ok,
+      ms: Math.round(performance.now() - started),
     })
     if (!res.ok) return false
     const data = (await res.json()) as TokenResponse
@@ -88,18 +97,41 @@ export async function request<T>(
     })
   }
 
-  let res = await send()
-  if (res.status === 401 && retryOn401 && auth) {
-    refreshPromise ??= doRefresh().finally(() => {
-      refreshPromise = null
-    })
-    const refreshed = await refreshPromise
-    if (refreshed) {
-      res = await send()
-    } else {
-      clearTokens()
+  const method = (rest.method ?? 'GET').toString().toUpperCase()
+  const started = performance.now()
+
+  let res: Response
+  try {
+    res = await send()
+    if (res.status === 401 && retryOn401 && auth) {
+      refreshPromise ??= doRefresh().finally(() => {
+        refreshPromise = null
+      })
+      const refreshed = await refreshPromise
+      if (refreshed) {
+        res = await send()
+      } else {
+        clearTokens()
+      }
     }
+  } catch (error) {
+    addApiLog({
+      method,
+      path,
+      status: 0,
+      ok: false,
+      ms: Math.round(performance.now() - started),
+    })
+    throw error
   }
+
+  addApiLog({
+    method,
+    path,
+    status: res.status,
+    ok: res.ok,
+    ms: Math.round(performance.now() - started),
+  })
 
   if (!res.ok) {
     let code = 'http_error'

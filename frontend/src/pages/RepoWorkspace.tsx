@@ -222,9 +222,9 @@ export default function RepoWorkspace() {
   return (
     <div
       ref={containerRef}
-      className="flex h-[calc(100svh-3.5rem)] flex-col lg:flex-row"
+      className="flex h-[calc(100svh-3.5rem)] flex-col overflow-hidden lg:flex-row"
     >
-      <div className="relative min-h-[42svh] flex-1">
+      <div className="relative h-[45svh] shrink-0 lg:h-auto lg:flex-1">
         {loading ? (
           <div className="grid h-full place-items-center bg-canvas text-slate-400">
             <Loader2 className="size-6 animate-spin" />
@@ -262,9 +262,9 @@ export default function RepoWorkspace() {
 
       <aside
         style={{ '--panel-w': `${panelWidth}px` } as CSSProperties}
-        className="flex w-full flex-col border-t border-border bg-surface lg:w-[var(--panel-w)] lg:shrink-0 lg:border-t-0 lg:border-l"
+        className="flex min-h-0 w-full flex-1 flex-col border-t border-border bg-surface lg:w-[var(--panel-w)] lg:flex-none lg:shrink-0 lg:border-t-0 lg:border-l"
       >
-        <div className="border-b border-border p-4">
+        <div className="shrink-0 border-b border-border p-4">
           <div className="flex items-center justify-between gap-2">
             <Link
               to="/dashboard"
@@ -303,7 +303,7 @@ export default function RepoWorkspace() {
           </div>
         </div>
 
-        <div className="border-b border-border p-4">
+        <div className="shrink-0 border-b border-border p-4">
           <StageTimeline status={status} demo={statusDemo} />
         </div>
 
