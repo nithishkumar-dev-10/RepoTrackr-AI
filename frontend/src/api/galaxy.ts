@@ -60,6 +60,18 @@ export function getGraph(_repoId: number): Promise<DemoData<Graph>> {
   return Promise.resolve({ data: mockGraph, demo: true })
 }
 
+/**
+ * Synchronous demo data for the landing page (no network, no repo).
+ * Keeps every mock behind this module.
+ */
+export function demoResponseForQuery(query: string): QueryResponse {
+  return mockResponseForIntent(detectIntent(query))
+}
+
+export function demoGraph(): Graph {
+  return mockGraph
+}
+
 /** POST /repos/{id}/index */
 export function startIndex(repoId: number): Promise<DemoData<StatusOnly>> {
   return withFallback(
