@@ -1,7 +1,7 @@
 # Project Summary
 
 ## What This Project Is
-RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. Right now the foundation exists — settings, the database engine, the SQLAlchemy models, the first Alembic migration, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh, logout, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). Every Part 2–4 endpoint is also registered as a stub that verifies repo ownership and returns `501 {"status": "not_implemented"}`, so the frontend is already wired. The deterministic pipeline, analysis, AI and frontend are still scaffolded but empty.
+RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. Right now the foundation exists — settings, the database engine, the SQLAlchemy models, the first Alembic migration, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh, logout, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). Every Part 2–4 endpoint is also registered as a stub that verifies repo ownership and returns `501 {"status": "not_implemented"}`, so the frontend is already wired. A complete React + TypeScript + Vite frontend lives in `frontend/`: a landing page, signup/login/verify-email, a dashboard, a repo workspace (dark 3D code-graph canvas with an interactive Reader/Plan/Context panel and a ⌘K command bar) and a Developer page; it calls the real endpoints and falls back to clearly-badged "Demo data" for the `501` ones. The deterministic pipeline, analysis and AI layers are still scaffolded but empty.
 
 ## Project Structure
 ```
@@ -106,8 +106,29 @@ RepoTrackr-AI/
 │   ├── context_packer/.gitkeep      # Empty — packer evals
 │   ├── data/.gitkeep                # Empty — eval data
 │   └── plan_verifier/.gitkeep       # Empty — plan verification evals
-├── frontend/
-│   └── .gitkeep                     # Empty — no frontend code yet
+├── frontend/                        # React + TS + Vite client (see Layer 8)
+│   ├── .env.example                 # VITE_API_URL template (a real .env is gitignored)
+│   ├── index.html                   # Vite HTML entry
+│   ├── package.json                 # Scripts: dev, build, typecheck, lint
+│   ├── vite.config.ts               # Vite + Tailwind + `@` alias
+│   ├── tsconfig*.json               # App/node TS configs (strict, verbatimModuleSyntax)
+│   ├── .oxlintrc.json               # Lint rules (oxlint)
+│   ├── components.json              # shadcn/ui config
+│   ├── public/                      # favicon.svg, icons.svg
+│   └── src/
+│       ├── main.tsx                 # Providers (MotionConfig/Auth/Toast/Tooltip) + root render
+│       ├── App.tsx                  # Route table (public / guest / protected)
+│       ├── index.css                # Design tokens (colors, radii, glow tokens/utilities) + Tailwind layers
+│       ├── api/                     # client.ts, auth.ts, repos.ts, galaxy.ts (mock-fallback boundary)
+│       ├── mock/                    # Typed mock data for the 501 endpoints
+│       ├── types/                   # Wire + UI types (auth, repo, graph, query, pipeline, api)
+│       ├── lib/                     # env, tokenStorage, motion, validation, authErrors, github,
+│       │                            #   graphLayout, planStatus, endpoints, apiLog, utils
+│       ├── context/                 # AuthContext, ToastContext
+│       ├── components/              # shared (GlowCard, GlowButton, GlowRipple, …) + ui/ (Radix)
+│       │                            #   + landing/ + auth/ + dashboard/ + workspace/
+│       └── pages/                   # Landing, Signup, Login, VerifyEmail, Dashboard,
+│                                    #   RepoWorkspace, Developer, NotFound
 └── scripts/
     └── .gitkeep                     # Empty — helper scripts
 ```
@@ -115,7 +136,7 @@ RepoTrackr-AI/
 ## The Stack at a Glance
 Settings -> Database Core -> Data Models -> Schema Migrations (Alembic) -> Pipeline & Analysis -> AI Layer -> Features & HTTP API -> Frontend, with Docker/Evals/Scripts as supporting tooling.
 
-(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, the complete auth feature with rate limiting, the repo-records feature (add/list/get/delete), the Part 2–4 stub endpoints, the Pydantic schemas, the endpoint/mock/OpenAPI/Postman contract, and the `security` helpers (password hashing, JWT, email tokens), plus unit and endpoint tests. Everything above Layer 7 is an empty folder skeleton.)
+(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, the complete auth feature with rate limiting, the repo-records feature (add/list/get/delete), the Part 2–4 stub endpoints, the Pydantic schemas, the endpoint/mock/OpenAPI/Postman contract, and the `security` helpers (password hashing, JWT, email tokens), plus unit and endpoint tests. Layer 8 (the frontend) is built and talks to Layer 7. Layers 5–6 — the deterministic pipeline/analysis and the AI layer — are still empty folder skeletons, and their endpoints are the `501` stubs the frontend renders as "Demo data".)
 
 ## Layer by Layer
 
@@ -601,21 +622,69 @@ JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a
 
 ### Layer 8: Frontend
 
-**What it is:** The reserved folder for the browser UI.
-**Why it exists:** To keep client code out of the backend and let the API stay headless.
-**Files in it:** `frontend/.gitkeep` only.
-**Depends on:** Layer 7 (HTTP API).
+**What it is:** The React + TypeScript + Vite single-page app: landing page, auth pages, dashboard, repo workspace (3D code-graph canvas + Reader/Plan/Context panel), and a Developer page.
+**Why it exists:** Humans need a UI, and the workspace turns the deterministic graph/evidence into something you can explore; it also keeps all client code out of the backend so the API stays headless.
+**Files in it:** `frontend/src/main.tsx` (providers + render), `frontend/src/App.tsx` (routes), `frontend/src/index.css` (tokens), `frontend/src/api/*` (`client.ts`, `auth.ts`, `repos.ts`, `galaxy.ts`), `frontend/src/mock/*`, `frontend/src/types/*`, `frontend/src/lib/*`, `frontend/src/context/{AuthContext,ToastContext}.tsx`, `frontend/src/components/*` (shared, `ui/` Radix primitives, `landing/`, `auth/`, `dashboard/`, `workspace/`), and `frontend/src/pages/*`.
+**Depends on:** Layer 7 (HTTP API) — every data call goes through `src/api/`.
 **Used by:** end users.
 
-*Not implemented yet. The folder contains only a `.gitkeep`; `.gitignore` already anticipates Node/Next/Vite artifacts (`node_modules/`, `.next/`, `.vite/`).*
+*Built and passing `npm run typecheck` / `npm run build`. The three query modes and the workspace graph render from `src/api/galaxy.ts`, which calls the real endpoint first and falls back to `src/mock/*` with a visible "Demo data" badge for the endpoints the backend still returns `501` for.*
 
 #### Study Notes for this layer
 
-**What is `frontend/`?**
-The planned home of the web client.
-*Why do we need it?* Humans need a UI, not raw JSON.
-*What breaks without it?* There is no visual way to use the product.
-*Think of it as:* the showroom floor; the factory (API) works without it, but customers can't browse.
+**What is `src/main.tsx`?**
+The browser entry: it wraps the app in `MotionConfig reducedMotion="user"`, `BrowserRouter`, `AuthProvider`, `ToastProvider` and `TooltipProvider`, then renders `App` into `#root`.
+*Why do we need it?* Every route needs the auth/toast/tooltip context and a single place to honour the user's reduced-motion preference.
+*What breaks without it?* No React tree mounts; auth state, toasts and tooltips would be unavailable everywhere.
+*Think of it as:* the power switch and fuse box for the whole UI.
+
+**What is `src/App.tsx`?**
+The route table: `/` (Landing) and `/verify-email` are public, `/login` + `/signup` sit behind `GuestRoute`, and `/dashboard`, `/repo/:id`, `/developer` sit behind `ProtectedRoute` inside `AppLayout`; `*` is the 404 page.
+*Why do we need it?* It keeps "who can see what" in one place and reuses the navbar shell for signed-in pages.
+*What breaks without it?* The app has no navigation, and protected pages wouldn't require a session.
+*Think of it as:* the building directory plus the badge-check at each floor.
+
+**What is `src/api/client.ts`?**
+The thin `fetch` wrapper: prefixes `VITE_API_URL`, JSON-encodes bodies, attaches the bearer access token, does one refresh-and-retry on a `401`, parses the backend `{"error": {...}}` envelope into an `ApiError`, and records each call for the Developer page's activity log.
+*Why do we need it?* Every request needs the same base URL, auth header, refresh and error handling instead of repeating it per call.
+*What breaks without it?* Tokens aren't attached or refreshed, and each caller parses errors differently.
+*Think of it as:* the single reception line every request goes through before reaching the API.
+
+**What is `src/api/galaxy.ts`?**
+The mock-fallback boundary: for the endpoints the backend returns `501` for (`index`, `index/status`, `index/summary`, `plan`, `reader`, `context`, `query`, `agent/trace`, `evals`) it calls the real route first and, on failure that is not a `401`/`403`, returns typed mock data with `demo: true`; auth errors are rethrown. `getGraph` is always demo (no graph route exists yet).
+*Why do we need it?* The whole workspace can be built and demoed now, while still using the real API the moment those routes are implemented.
+*What breaks without it?* The workspace would show errors everywhere until Parts 2–4 land.
+*Think of it as:* a placeholder actor who steps in only when the lead hasn't arrived, with a sign saying so.
+
+**What is `src/api/auth.ts` / `src/api/repos.ts`?**
+Typed wrappers over the real endpoints: `signup`, `login`, `verifyEmail`, `resendVerification`, `getMe`; and `listRepos`, `createRepo`, `getRepo`, `deleteRepo` (plus `mapRepoStatus`/`REPO_STATUS_LABEL` for the status chip).
+*Why do we need it?* Screens call small typed functions instead of hand-building requests and mapping wire shapes.
+*What breaks without it?* Components would know about URLs and raw JSON shapes.
+*Think of it as:* the front desk's list of "the exact forms to fill in" for each service.
+
+**What is `src/types/`?**
+Shared TypeScript types mirroring the backend (`auth`, `repo`, `api`) plus UI-only types (`graph`, `query`, `pipeline`), including `UiRepoStatus` and the `INDEX_STAGES` list.
+*Why do we need it?* One typed contract keeps the UI honest about what the API returns.
+*What breaks without it?* Shapes drift and mistakes only show up at runtime.
+*Think of it as:* the agreed blueprint both sides build to.
+
+**What is `src/lib/graphLayout.ts`?**
+A deterministic layout shared by the 2D and 3D views: clusters sit on a ring, nodes spiral inside their cluster (no randomness), capped at 1500 nodes, plus `buildAdjacency` and `positionsForIds` helpers.
+*Why do we need it?* Both graph views must agree on where nodes are, and the layout must be stable across renders.
+*What breaks without it?* Nodes would jump around and the 2D/3D toggle couldn't share a picture.
+*Think of it as:* an usher who seats every guest in the same seat every time.
+
+**What is the repo workspace (`src/components/workspace/*`)?**
+The core screen: `GraphView` picks 3D (`Graph3D`, lazy-loaded WebGL "galaxy") / 2D (`Graph2D`) / List (`GraphList`, Mermaid + module list); `ModeTabs` + `ModePanel` switch Reader (`ReaderPanel`), Plan (`PlanPanel`) and Context (`ContextPanel`); `CommandBar` is the ⌘K ask box; `StageTimeline` shows clone→parse→graph→index; `CodeBlock` renders shiki-highlighted snippets (lazily imported); `CanvasErrorBoundary` falls back to the 2D graph if WebGL fails.
+*Why do we need it?* It is where evidence becomes explorable: highlight nodes, follow the reading order, see plan status colors and the packed-context tiers.
+*What breaks without it?* The product has data but no way to actually look at it.
+*Think of it as:* the control room where you watch and query the codebase.
+
+**What is the Developer page (`src/pages/Developer.tsx`)?**
+A page listing every backend endpoint (method, path, Live vs Demo) and a live **API activity** inspector fed by `src/lib/apiLog.ts` (the same log `client.ts` writes to), with a clear button.
+*Why do we need it?* It makes which routes are real vs `501` and what the app is actually calling obvious during development.
+*What breaks without it?* Debugging "is this live or mock?" means digging through the network tab.
+*Think of it as:* a wall of status lights for every door into the API.
 
 ---
 
@@ -754,9 +823,31 @@ Every Part 2–4 endpoint is registered but not implemented, so the frontend can
 
 ```
 Browser ──POST /repos/{id}/index (Bearer)──► app/main.py:app ──► features/indexing/router.py
-                                                │ get_owned_repo: 401 / 404 / else
-                                                ▼
-                                     501 {"status": "not_implemented"}
+                                │ get_owned_repo: 401 / 404 / else
+                                ▼
+                     501 {"status": "not_implemented"}
+```
+
+### Frontend flow (browser -> API -> back)
+
+The React app in `frontend/` talks to Layer 7 through `src/api/`:
+
+1. **Boot (main.tsx).** `main.tsx` mounts the providers and `App.tsx` picks a route. `ProtectedRoute`/`GuestRoute` (`src/components/guards.tsx`) redirect based on the session held in `AuthContext` (tokens in `localStorage` via `src/lib/tokenStorage.ts`).
+2. **Auth.** Signup/login/verify call `src/api/auth.ts` -> `src/api/client.ts` -> the real `/auth/*` routes; a successful login stores the token pair in `AuthContext` and `/auth/me` restores the session on reload.
+3. **Dashboard.** `Dashboard` calls `listRepos()` (real `GET /repos`) and renders `RepoCard`s; the track modal calls `createRepo()` (real `POST /repos`). "Index" calls `startIndex()` in `src/api/galaxy.ts`.
+4. **Workspace.** `/repo/:id` loads the repo (`getRepo`, real) and the graph (`getGraph`, always demo), starts polling `getIndexStatus()` for the timeline, and lays out nodes with `src/lib/graphLayout.ts`. `GraphView` renders the lazy `Graph3D` (three.js/WebGL) with 2D `Graph2D` and Mermaid `GraphList` fallbacks.
+5. **Query modes.** The ⌘K `CommandBar` and tab switches call `queryRepo()`/`getReader()`/`getPlan()`/`buildContext()` from `src/api/galaxy.ts`: each tries the real route and, on `501`, returns typed mock data flagged `demo: true`, so the panel shows a "Demo data" badge. Reader highlights the reading order and cites `file:line`; Plan colors nodes by check status; Context highlights the packed tiers and shows the token budget.
+6. **Activity.** Every call through `client.ts` is appended to the in-memory log in `src/lib/apiLog.ts`, which the Developer page displays live.
+
+```
+Browser (frontend/)
+  Page/component ──► src/api/*.ts ──► src/api/client.ts ──► VITE_API_URL (Layer 7)
+                                              │  Bearer token, 401 refresh-retry, error envelope
+                                              ▼
+                     real route  ──► 200  (rendered directly)
+                     real route  ──► 501  ──► src/api/galaxy.ts falls back to src/mock/
+                                              ▼
+                                  rendered with a "Demo data" badge
 ```
 
 ## Current Status
@@ -776,15 +867,15 @@ Working now (built and previously verified, see `docs/changes.md`):
 - Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing, JWT access/refresh with type-checked `decode_token`, and verify/reset email-token helpers.
 - `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map and docs links.
 - Tests (`backend/tests/test_security.py`, `test_auth.py`, `test_repos.py`, `test_stubs.py`, `conftest.py`): 103 passing.
+- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email, dashboard (track-repo modal + repo cards), repo workspace (3D/2D/List graph, Reader/Plan/Context modes, ⌘K command bar, indexing timeline), and the Developer page (endpoint catalog + live API activity). `npm run typecheck` and `npm run build` pass; lint is warning-only. It calls the live `/auth` and `/repos` routes and shows a "Demo data" badge for the `501` endpoints.
 
 Not implemented yet (registered as `501` stubs, built in Parts 2–4):
 - Deterministic pipeline and analysis (`app/pipeline/*`, `app/analysis/*`), background tasks (`app/tasks`).
 - AI layer (`app/ai/*`) and the agent layer (`app/agent` router is a stub only).
-- Frontend (`frontend/` — `.gitkeep` only).
 - Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile).
 - Evals (`evals/*` — `.gitkeep` only) and helper scripts (`scripts/` — `.gitkeep` only).
 
-Part 1 status: **the backend is complete** — auth, repos, all Part 2–4 stubs, the error contract, tests, README, and the OpenAPI/Postman docs all exist and pass. The only Part 1 "Done when" item not yet true in this repository is opening the **Repo Detail page**, because the frontend pages are a separate team deliverable (`frontend/` is empty). Part 1 is therefore backend-complete, not whole-product-complete.
+Part 1 status: **backend-complete and now front-complete for the pages the backend supports.** Auth, repos, all Part 2–4 stubs, the error contract, tests, README, and the OpenAPI/Postman docs exist and pass, and the frontend pages (including the repo workspace that opens from a dashboard repo card) are built. The workspace's graph, reader, plan and context views use clearly-badged "Demo data" until the Part 2–4 endpoints stop returning `501`. Note: to use the frontend against a local backend, add `http://localhost:5173` to `backend/.env`'s `CORS_ORIGINS` (the template defaults to port 3000).
 
 ## Running It Locally
 
@@ -834,8 +925,20 @@ python -m pytest tests/test_repos.py -q
 python -m pytest tests/test_stubs.py -q
 ```
 
+Run the frontend (from `frontend/`, Node 20+):
+```bash
+npm install
+cp .env.example .env        # optional; VITE_API_URL defaults to http://localhost:8000
+npm run dev                 # Vite dev server on http://localhost:5173
+npm run typecheck           # tsc -b --noEmit
+npm run build               # production build (3D canvas + Mermaid are code-split)
+npm run lint                # oxlint
+```
+Start the backend first (from `backend/`, venv active) with `uvicorn app.main:app --reload`. The Vite dev server runs on port **5173**, so add `http://localhost:5173` (and `http://127.0.0.1:5173`) to `CORS_ORIGINS` in `backend/.env` or the browser will block the API calls. The workspace's graph, reader, plan and context views show a "Demo data" badge until the Part 2–4 endpoints stop returning `501`.
+
 ## Where You Can Help
 
+- **Layer 8, `frontend/`:** the client is built; when a Part 2–4 endpoint stops returning `501`, remove its entry from the mock fallback in `src/api/galaxy.ts` (and its "Demo data" badge will disappear automatically) or replace the `501` handling with the real shape.
 - **Layer 7, `app/main.py`:** the app factory exists and now includes all routers (auth, repos, and the Part 2–4 stubs) — replace stub routers with real ones and extend middleware as features are built.
 - **Layer 7, `app/security/`:** helpers exist and are tested — extend them (e.g. token rehash checks) as auth needs grow.
 - **Layer 7, `app/schemas/`:** schemas for Part 1 exist (plus `stub.py`) — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`/`docs/openapi.json`/`docs/postman_collection.json`) when endpoints change.
