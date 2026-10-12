@@ -65,12 +65,13 @@ export function Navbar() {
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-opacity duration-300',
+          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-[opacity,box-shadow] duration-300',
           scrolled ? 'opacity-100' : 'opacity-0',
         )}
         style={{
           background:
             'linear-gradient(90deg, transparent, var(--glow-accent), var(--glow-violet), var(--glow-cyan), transparent)',
+          boxShadow: scrolled ? '0 0 12px -1px var(--glow-accent)' : 'none',
         }}
       />
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
