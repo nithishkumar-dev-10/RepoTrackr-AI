@@ -41,6 +41,18 @@ const ACCENT: Record<ToastVariant, string> = {
   info: 'text-brand',
 }
 
+const VARIANT_GLOW: Record<ToastVariant, string> = {
+  success: '0 0 20px -8px rgba(34, 197, 94, 0.55), 0 0 0 1px rgba(34, 197, 94, 0.18)',
+  error: '0 0 20px -8px rgba(239, 68, 68, 0.5), 0 0 0 1px rgba(239, 68, 68, 0.18)',
+  info: '0 0 20px -8px rgba(59, 91, 255, 0.55), 0 0 0 1px rgba(59, 91, 255, 0.2)',
+}
+
+const VARIANT_COLOR: Record<ToastVariant, string> = {
+  success: '#22C55E',
+  error: '#EF4444',
+  info: '#3B5BFF',
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
@@ -74,7 +86,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 initial={{ opacity: 0, y: -12, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.15 } }}
-                className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-border bg-surface p-4 shadow-lg"
+                className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-border bg-surface p-4"
+                style={{
+                  boxShadow: VARIANT_GLOW[variant],
+                  borderLeft: `3px solid ${VARIANT_COLOR[variant]}`,
+                }}
                 role="status"
               >
                 <Icon className={cn('mt-0.5 size-4 shrink-0', ACCENT[variant])} />
