@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 
 const NODES = [
   { x: 60, y: 80 },
@@ -31,6 +31,7 @@ const EDGES: [number, number][] = [
 
 /** Soft animated node network used on the auth gradient panel. Pure SVG. */
 export function NodeNetwork() {
+  const reduced = useReducedMotion()
   return (
     <svg
       viewBox="0 0 400 300"
@@ -57,23 +58,31 @@ export function NodeNetwork() {
           stroke="rgba(255,255,255,0.30)"
           strokeWidth={1}
           initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: [0.25, 0.6, 0.25] }}
-          transition={{
-            pathLength: { duration: 1.2, delay: 0.3 + i * 0.08 },
-            opacity: {
-              duration: 4 + (i % 3),
-              repeat: Infinity,
-              ease: 'easeInOut',
-              delay: i * 0.2,
-            },
-          }}
+          animate={
+            reduced
+              ? { pathLength: 1, opacity: 0.4 }
+              : { pathLength: 1, opacity: [0.25, 0.6, 0.25] }
+          }
+          transition={
+            reduced
+              ? { duration: 0, delay: 0 }
+              : {
+                  pathLength: { duration: 1.2, delay: 0.3 + i * 0.08 },
+                  opacity: {
+                    duration: 4 + (i % 3),
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                    delay: i * 0.2,
+                  },
+                }
+          }
         />
       ))}
 
       {NODES.map((node, i) => (
         <motion.g
           key={`${node.x}-${node.y}`}
-          animate={{ y: [0, -6, 0] }}
+          animate={reduced ? undefined : { y: [0, -6, 0] }}
           transition={{
             duration: 5 + (i % 4),
             repeat: Infinity,
@@ -94,39 +103,47 @@ export function NodeNetwork() {
             cy={node.y}
             r={i % 3 === 0 ? 5 : 3.5}
             fill="#fff"
-            animate={{ opacity: [0.65, 1, 0.65] }}
-            transition={{
-              duration: 3 + (i % 3),
-              repeat: Infinity,
-              ease: 'easeInOut',
-              delay: i * 0.25,
-            }}
+            animate={reduced ? { opacity: 1 } : { opacity: [0.65, 1, 0.65] }}
+            transition={
+              reduced
+                ? { duration: 0 }
+                : {
+                    duration: 3 + (i % 3),
+                    repeat: Infinity,
+                    ease: 'easeInOut',
+                    delay: i * 0.25,
+                  }
+            }
             style={{ filter: 'drop-shadow(0 0 4px rgba(255,255,255,0.9))' }}
           />
         </motion.g>
       ))}
 
       {/* Travelling pulse plus a trailing glow. */}
-      <motion.circle
-        r={7}
-        fill="rgba(255,255,255,0.35)"
-        filter="url(#auth-soft-glow)"
-        animate={{
-          cx: [NODES[0].x, NODES[1].x, NODES[2].x, NODES[9].x, NODES[6].x],
-          cy: [NODES[0].y, NODES[1].y, NODES[2].y, NODES[9].y, NODES[6].y],
-        }}
-        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.circle
-        r={3.5}
-        fill="#fff"
-        style={{ filter: 'drop-shadow(0 0 5px rgba(255,255,255,1))' }}
-        animate={{
-          cx: [NODES[0].x, NODES[1].x, NODES[2].x, NODES[9].x, NODES[6].x],
-          cy: [NODES[0].y, NODES[1].y, NODES[2].y, NODES[9].y, NODES[6].y],
-        }}
-        transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
-      />
+      {reduced ? null : (
+        <>
+          <motion.circle
+            r={7}
+            fill="rgba(255,255,255,0.35)"
+            filter="url(#auth-soft-glow)"
+            animate={{
+              cx: [NODES[0].x, NODES[1].x, NODES[2].x, NODES[9].x, NODES[6].x],
+              cy: [NODES[0].y, NODES[1].y, NODES[2].y, NODES[9].y, NODES[6].y],
+            }}
+            transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.circle
+            r={3.5}
+            fill="#fff"
+            style={{ filter: 'drop-shadow(0 0 5px rgba(255,255,255,1))' }}
+            animate={{
+              cx: [NODES[0].x, NODES[1].x, NODES[2].x, NODES[9].x, NODES[6].x],
+              cy: [NODES[0].y, NODES[1].y, NODES[2].y, NODES[9].y, NODES[6].y],
+            }}
+            transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        </>
+      )}
     </svg>
   )
 }

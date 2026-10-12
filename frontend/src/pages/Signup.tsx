@@ -32,6 +32,7 @@ export default function Signup() {
   }>({})
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [success, setSuccess] = useState(false)
   const [done, setDone] = useState<string | null>(null)
   const [resending, setResending] = useState(false)
 
@@ -59,8 +60,9 @@ export default function Signup() {
     setSubmitting(true)
     try {
       const message = await signup(email.trim(), password)
-      setDone(message)
+      setSuccess(true)
       toast({ title: 'Account created', description: 'Check your email to verify.', variant: 'success' })
+      window.setTimeout(() => setDone(message), 700)
     } catch (error) {
       setFormError(describeAuthError(error).message)
       setSubmitting(false)
@@ -211,9 +213,14 @@ export default function Signup() {
             size="lg"
             className="w-full"
             magnetic={false}
-            disabled={submitting}
+            disabled={submitting || success}
           >
-            {submitting ? (
+            {success ? (
+              <>
+                <Check className="size-4" />
+                Account created
+              </>
+            ) : submitting ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
                 Creating account…
@@ -225,6 +232,7 @@ export default function Signup() {
               </>
             )}
           </GlowButton>
+          <SuccessRipple show={success} />
         </div>
         <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <Check className="size-3.5 text-status-done" />
