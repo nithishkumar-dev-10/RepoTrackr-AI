@@ -41,7 +41,7 @@ export function FeatureCards() {
         {FEATURES.map((feature, i) => (
           <ScrollReveal key={feature.title} delay={i * 0.1}>
             <SpotlightCard className="h-full p-6 transition-transform duration-300 hover:-translate-y-1">
-              <div className="grid size-11 place-items-center rounded-xl bg-accent text-brand">
+              <div className="glow-sm grid size-11 place-items-center rounded-xl bg-accent text-brand transition-shadow duration-300">
                 <feature.icon className="size-5" />
               </div>
               <h3 className="mt-4 text-lg font-semibold text-foreground">

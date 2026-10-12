@@ -22,7 +22,7 @@ export function GlowButton({
     <Button
       {...props}
       className={cn(
-        'relative overflow-hidden glow-md',
+        'relative overflow-hidden glow-md hover:glow-lg',
         shimmer && 'shimmer',
         className,
       )}

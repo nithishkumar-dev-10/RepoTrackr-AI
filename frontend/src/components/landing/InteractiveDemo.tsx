@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Search, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { demoResponseForQuery } from '@/api/galaxy'
 import { CitationChip } from '@/components/CitationChip'
@@ -23,6 +24,38 @@ const INTENT_LABEL: Record<string, string> = {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Renders `inline code` as a chip and **bold** as a strong span. */
+function renderInline(text: string): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const regex = /(`[^`]*`|\*\*[^*]+\*\*)/g
+  let last = 0
+  let key = 0
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text))) {
+    if (match.index > last) nodes.push(text.slice(last, match.index))
+    const token = match[0]
+    if (token.startsWith('`')) {
+      nodes.push(
+        <code
+          key={key++}
+          className="rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[0.8em] text-brand"
+        >
+          {token.slice(1, -1)}
+        </code>,
+      )
+    } else {
+      nodes.push(
+        <strong key={key++} className="font-semibold text-foreground">
+          {token.slice(2, -2)}
+        </strong>,
+      )
+    }
+    last = match.index + token.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
 }
 
 export function InteractiveDemo() {
@@ -72,7 +105,16 @@ export function InteractiveDemo() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+      <div className="relative">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] blur-2xl"
+          style={{
+            background:
+              'radial-gradient(60% 60% at 50% 40%, rgba(59,91,255,0.25), transparent 72%)',
+          }}
+        />
+        <div className="gradient-border gradient-border-on overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full bg-[#EF4444]/70" />
@@ -132,7 +174,7 @@ export function InteractiveDemo() {
                 !streaming && 'opacity-40',
               )}
             >
-              {answer}
+              {renderInline(answer)}
               {streaming && shownWords < words.length ? (
                 <span className="ml-0.5 inline-block h-4 w-1 translate-y-0.5 animate-pulse bg-muted-foreground" />
               ) : null}
@@ -168,17 +210,30 @@ export function InteractiveDemo() {
             ))}
           </div>
         </div>
+        </div>
       </div>
 
-      <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-canvas p-5">
-        <p className="text-sm font-medium text-white/90">Module graph</p>
-        <p className="mt-0.5 text-xs text-white/50">
+      <div className="gradient-border gradient-border-on noise relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-canvas p-5 glow-md">
+        <div
+          aria-hidden="true"
+          className="dot-grid dot-grid-dark pointer-events-none absolute inset-0 opacity-60"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full blur-3xl"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(59,91,255,0.4), transparent 68%)',
+          }}
+        />
+        <p className="relative text-sm font-medium text-white/90">Module graph</p>
+        <p className="relative mt-0.5 text-xs text-white/50">
           Entry point ring, clusters by area, edges are imports.
         </p>
         <div className="relative mt-3 flex-1">
           <MiniGraph className="h-full min-h-56" />
         </div>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-white/60">
+        <div className="relative mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-white/60">
           {[
             ['#3B5BFF', 'Core'],
             ['#16A34A', 'API'],
@@ -188,7 +243,10 @@ export function InteractiveDemo() {
             <span key={label} className="inline-flex items-center gap-1.5">
               <span
                 className="size-2 rounded-full"
-                style={{ backgroundColor: color }}
+                style={{
+                  backgroundColor: color,
+                  boxShadow: `0 0 8px 1px ${color}`,
+                }}
               />
               {label}
             </span>

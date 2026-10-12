@@ -28,10 +28,10 @@ export function CitationChip({
           type="button"
           onClick={onClick}
           className={cn(
-            'inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs transition-colors',
+            'inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs transition-[color,border-color,box-shadow] duration-200',
             active
-              ? 'border-brand/40 bg-accent text-brand'
-              : 'border-border bg-surface text-muted-foreground hover:border-brand/40 hover:text-brand',
+              ? 'border-brand/40 bg-accent text-brand glow-sm'
+              : 'border-border bg-surface text-muted-foreground hover:border-brand/40 hover:text-brand hover:glow-sm',
             className,
           )}
           title={label}
