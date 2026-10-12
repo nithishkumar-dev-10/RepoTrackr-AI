@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 
 import { cn } from '@/lib/utils'
 
@@ -55,6 +55,7 @@ function isPathEdge(a: string, b: string) {
 }
 
 export function MiniGraph({ className }: { className?: string }) {
+  const reduced = useReducedMotion()
   const pathPoints = PATH.map((id) => byId.get(id)!).filter(Boolean)
 
   return (
@@ -112,7 +113,7 @@ export function MiniGraph({ className }: { className?: string }) {
             strokeWidth={1.6}
             strokeLinecap="round"
             strokeDasharray="1 10"
-            animate={{ strokeDashoffset: [0, -22] }}
+            animate={reduced ? undefined : { strokeDashoffset: [0, -22] }}
             transition={{
               duration: 1.4,
               repeat: Infinity,
@@ -136,18 +137,31 @@ export function MiniGraph({ className }: { className?: string }) {
             style={{ transformOrigin: `${node.x}px ${node.y}px` }}
           >
             {node.entry ? (
-              <motion.circle
-                cx={node.x}
-                cy={node.y}
-                r={node.r + 6}
-                fill="none"
-                stroke={color}
-                strokeWidth={1.4}
-                strokeDasharray="3 4"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
-                style={{ transformOrigin: `${node.x}px ${node.y}px` }}
-              />
+              <>
+                <motion.circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={node.r + 4}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.6}
+                  animate={reduced ? undefined : { scale: [0.95, 1.55], opacity: [0.5, 0] }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: 'easeOut' }}
+                  style={{ transformOrigin: `${node.x}px ${node.y}px` }}
+                />
+                <motion.circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={node.r + 6}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.4}
+                  strokeDasharray="3 4"
+                  animate={reduced ? undefined : { rotate: 360 }}
+                  transition={{ duration: 18, repeat: Infinity, ease: 'linear' }}
+                  style={{ transformOrigin: `${node.x}px ${node.y}px` }}
+                />
+              </>
             ) : null}
             <circle cx={node.x} cy={node.y} r={node.r + 5} fill="url(#mini-glow)" />
             <circle
@@ -168,11 +182,15 @@ export function MiniGraph({ className }: { className?: string }) {
         r={3.4}
         fill="#fff"
         style={{ filter: 'drop-shadow(0 0 4px rgba(124,147,255,1))' }}
-        animate={{
-          cx: pathPoints.map((p) => p.x),
-          cy: pathPoints.map((p) => p.y),
-          opacity: [0, 1, 1, 0],
-        }}
+        animate={
+          reduced
+            ? undefined
+            : {
+                cx: pathPoints.map((p) => p.x),
+                cy: pathPoints.map((p) => p.y),
+                opacity: [0, 1, 1, 0],
+              }
+        }
         transition={{
           duration: 5.2,
           repeat: Infinity,
