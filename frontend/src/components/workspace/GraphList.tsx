@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { PositionedNode } from '@/lib/graphLayout'
+import { PLAN_STATUS_META } from '@/lib/planStatus'
 import { cn } from '@/lib/utils'
 import type { Graph, PlanItemStatus } from '@/types'
-
-const STATUS_DOT: Record<PlanItemStatus, string> = {
-  done: 'bg-status-done',
-  partial: 'bg-status-partial',
-  missing: 'bg-status-missing',
-  unknown: 'bg-status-unknown',
-}
 
 function safeId(prefix: string, index: number): string {
   return `${prefix}${index}`
@@ -128,7 +122,13 @@ export function GraphList({
                         )}
                       >
                         {status ? (
-                          <span className={cn('size-2 rounded-full', STATUS_DOT[status])} />
+                          <span
+                            className="size-2 rounded-full"
+                            style={{
+                              backgroundColor: PLAN_STATUS_META[status].color,
+                              boxShadow: `0 0 8px 1px ${PLAN_STATUS_META[status].color}`,
+                            }}
+                          />
                         ) : (
                           <span
                             className="size-2 rounded-full"
