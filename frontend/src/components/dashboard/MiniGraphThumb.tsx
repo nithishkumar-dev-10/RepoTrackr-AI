@@ -39,6 +39,18 @@ export function MiniGraphThumb({
       preserveAspectRatio="xMidYMid slice"
       aria-hidden="true"
     >
+      <defs>
+        <filter id={`thumb-halo-${seed}`} x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="1.6" />
+        </filter>
+        <radialGradient id={`thumb-bg-${seed}`} cx="50%" cy="42%" r="70%">
+          <stop offset="0%" stopColor="#3B5BFF" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#3B5BFF" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <rect width="100" height="76" fill={`url(#thumb-bg-${seed})`} />
+
       {scene.edges.map(([a, b], i) => {
         const from = scene.nodes[a]
         const to = scene.nodes[b]
@@ -49,20 +61,27 @@ export function MiniGraphThumb({
             y1={from.y}
             x2={to.x}
             y2={to.y}
-            stroke="rgba(255,255,255,0.22)"
+            stroke="rgba(160,180,255,0.35)"
             strokeWidth={0.6}
           />
         )
       })}
-      {scene.nodes.map((node) => (
-        <circle
-          key={node.id}
-          cx={node.x}
-          cy={node.y}
-          r={node.r}
-          fill={node.hub ? '#7E96FF' : 'rgba(255,255,255,0.75)'}
-        />
-      ))}
+      {scene.nodes.map((node) => {
+        const color = node.hub ? '#7E96FF' : 'rgba(255,255,255,0.8)'
+        return (
+          <g key={node.id}>
+            <circle
+              cx={node.x}
+              cy={node.y}
+              r={node.r + 1.5}
+              fill={color}
+              opacity={0.5}
+              filter={`url(#thumb-halo-${seed})`}
+            />
+            <circle cx={node.x} cy={node.y} r={node.r} fill={color} />
+          </g>
+        )
+      })}
     </svg>
   )
 }

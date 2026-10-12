@@ -23,7 +23,13 @@ function DialogContent({
 }: ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-canvas/40 backdrop-blur-sm animate-in fade-in-0" />
+      <DialogPrimitive.Overlay
+        className="fixed inset-0 z-50 bg-canvas/50 backdrop-blur-md animate-in fade-in-0"
+        style={{
+          backgroundImage:
+            'radial-gradient(55% 45% at 50% 0%, rgba(59,91,255,0.25), transparent 70%)',
+        }}
+      />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

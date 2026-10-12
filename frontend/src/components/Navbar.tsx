@@ -24,7 +24,17 @@ export function Navbar() {
   const { toast } = useToast()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onScroll() {
+      setScrolled(window.scrollY > 8)
+    }
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     function onClick(event: MouseEvent) {
@@ -52,6 +62,17 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-surface/80 backdrop-blur-md">
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-opacity duration-300',
+          scrolled ? 'opacity-100' : 'opacity-0',
+        )}
+        style={{
+          background:
+            'linear-gradient(90deg, transparent, var(--glow-accent), var(--glow-violet), var(--glow-cyan), transparent)',
+        }}
+      />
       <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
         <Link
           to="/dashboard"
@@ -99,7 +120,7 @@ export function Navbar() {
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <span className="grid size-7 place-items-center rounded-full bg-canvas text-xs font-semibold text-canvas">
+            <span className="grid size-7 place-items-center rounded-full bg-canvas text-xs font-semibold text-white">
               {initial}
             </span>
             <span className="hidden max-w-40 truncate text-muted-foreground sm:inline">

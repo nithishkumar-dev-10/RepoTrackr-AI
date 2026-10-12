@@ -68,9 +68,9 @@ export function TrackRepoModal({
         onOpenChange(next)
       }}
     >
-      <DialogContent>
+      <DialogContent className="glass glow-lg">
         <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl bg-canvas text-canvas">
+          <span className="glow-sm grid size-10 place-items-center rounded-xl bg-canvas text-white">
             <GitBranch className="size-5" />
           </span>
           <div>

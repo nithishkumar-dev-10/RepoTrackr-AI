@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { ArrowUpRight, Boxes, Loader2 } from 'lucide-react'
+import type { CSSProperties } from 'react'
 
 import { MiniGraphThumb } from '@/components/dashboard/MiniGraphThumb'
 import { SpotlightCard } from '@/components/SpotlightCard'
@@ -9,22 +10,29 @@ import { mapRepoStatus, REPO_STATUS_LABEL } from '@/api/repos'
 import { cn } from '@/lib/utils'
 import type { Repo, UiRepoStatus } from '@/types'
 
-const STATUS_STYLE: Record<UiRepoStatus, { chip: string; dot: string }> = {
+const STATUS_STYLE: Record<
+  UiRepoStatus,
+  { chip: string; dot: string; glow: string }
+> = {
   not_indexed: {
     chip: 'border-transparent bg-status-unknown/20 text-muted-foreground',
     dot: 'bg-status-unknown',
+    glow: 'rgba(148,163,184,0.5)',
   },
   indexing: {
     chip: 'border-transparent bg-status-partial/15 text-status-partial',
-    dot: 'bg-status-partial animate-pulse',
+    dot: 'bg-status-partial',
+    glow: 'rgba(245,158,11,0.55)',
   },
   ready: {
     chip: 'border-transparent bg-status-done/15 text-status-done',
     dot: 'bg-status-done',
+    glow: 'rgba(22,163,74,0.5)',
   },
   error: {
     chip: 'border-transparent bg-status-missing/15 text-status-missing',
     dot: 'bg-status-missing',
+    glow: 'rgba(239,68,68,0.5)',
   },
 }
 
@@ -56,7 +64,14 @@ export function RepoCard({
           <MiniGraphThumb seed={repo.id} className="h-full w-full opacity-90" />
           <div className="absolute inset-0 bg-gradient-to-t from-canvas/60 to-transparent" />
           <Badge className={cn('absolute left-3 top-3', style.chip)}>
-            <span className={cn('size-1.5 rounded-full', style.dot)} />
+            <span
+              className={cn(
+                'pulse-dot size-1.5 rounded-full',
+                style.dot,
+                status === 'indexing' && 'animate-pulse',
+              )}
+              style={{ '--glow-soft': style.glow } as CSSProperties}
+            />
             {REPO_STATUS_LABEL[status]}
           </Badge>
         </div>

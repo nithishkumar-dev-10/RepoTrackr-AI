@@ -281,7 +281,7 @@ export default function RepoWorkspace() {
           </div>
 
           <div className="mt-3 flex items-center gap-2">
-            <span className="grid size-9 place-items-center rounded-lg bg-canvas text-canvas">
+            <span className="glow-sm grid size-9 place-items-center rounded-lg bg-canvas text-white">
               <GitBranch className="size-4" />
             </span>
             <div className="min-w-0">

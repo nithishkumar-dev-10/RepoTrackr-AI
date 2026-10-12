@@ -7,6 +7,7 @@ import { startIndex } from '@/api/galaxy'
 import { listRepos } from '@/api/repos'
 import { RepoCard } from '@/components/dashboard/RepoCard'
 import { TrackRepoModal } from '@/components/dashboard/TrackRepoModal'
+import { GlowButton } from '@/components/GlowButton'
 import { PageTransition } from '@/components/PageTransition'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -101,10 +102,10 @@ export default function Dashboard() {
               <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
               Refresh
             </Button>
-            <Button variant="brand" onClick={() => setModalOpen(true)}>
+            <GlowButton variant="brand" onClick={() => setModalOpen(true)}>
               <Plus className="size-4" />
               Track repository
-            </Button>
+            </GlowButton>
           </div>
         </div>
 
@@ -149,14 +150,14 @@ export default function Dashboard() {
                 Add a public GitHub repository to build its graph and start
                 asking questions.
               </p>
-              <Button
+              <GlowButton
                 variant="brand"
                 className="mt-5"
                 onClick={() => setModalOpen(true)}
               >
                 <Plus className="size-4" />
                 Track your first repository
-              </Button>
+              </GlowButton>
             </div>
           ) : (
             <motion.div

@@ -104,7 +104,7 @@ export function ReaderPanel({
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-canvas text-[10px] font-semibold text-canvas">
+                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-canvas text-[10px] font-semibold text-white">
                         {i + 1}
                       </span>
                       <span className="flex-1 truncate text-sm font-medium text-foreground">

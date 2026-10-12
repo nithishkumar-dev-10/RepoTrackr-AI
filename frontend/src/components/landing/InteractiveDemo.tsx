@@ -153,7 +153,7 @@ export function InteractiveDemo() {
 
         <div className="space-y-4 p-5">
           <div className="flex items-start gap-3">
-            <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-canvas text-canvas">
+            <span className="glow-sm mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-canvas text-white">
               <Search className="size-3.5" />
             </span>
             <p className="font-mono text-sm text-foreground">
