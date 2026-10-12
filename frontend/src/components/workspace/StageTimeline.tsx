@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Check, Loader2 } from 'lucide-react'
+import type { CSSProperties } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -47,40 +48,66 @@ export function StageTimeline({
 
       <Progress value={progress} className="mt-3" />
 
-      <ol className="mt-4 grid grid-cols-4 gap-2">
-        {INDEX_STAGES.map((stage, i) => {
-          const done = complete || (activeIndex >= 0 && i < activeIndex)
-          const active = !complete && i === activeIndex
-          return (
-            <li key={stage} className="flex flex-col items-center gap-1.5 text-center">
-              <span
-                className={cn(
-                  'grid size-7 place-items-center rounded-full border text-xs',
-                  done && 'border-status-done/30 bg-status-done/15 text-status-done',
-                  active && 'border-brand/40 bg-accent text-brand',
-                  !done && !active && 'border-border bg-surface text-muted-foreground',
-                )}
+      <div className="relative mt-4">
+        <div
+          aria-hidden="true"
+          className="absolute left-1 right-1 top-3.5 hidden h-0.5 rounded-full bg-border/70 sm:block"
+        />
+        <div
+          aria-hidden="true"
+          className="progress-glow absolute left-1 top-3.5 hidden h-0.5 rounded-full sm:block"
+          style={{
+            width: `calc((100% - 0.5rem) * ${complete ? 1 : activeIndex > 0 ? activeIndex / INDEX_STAGES.length : 0})`,
+            transition: 'width 400ms ease',
+          }}
+        />
+        <ol className="relative grid grid-cols-4 gap-2">
+          {INDEX_STAGES.map((stage, i) => {
+            const done = complete || (activeIndex >= 0 && i < activeIndex)
+            const active = !complete && i === activeIndex
+            return (
+              <li
+                key={stage}
+                className="flex flex-col items-center gap-1.5 text-center"
               >
-                {done ? (
-                  <Check className="size-3.5" />
-                ) : active ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <span className="font-mono">{i + 1}</span>
-                )}
-              </span>
-              <span
-                className={cn(
-                  'text-xs',
-                  active ? 'text-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {STAGE_LABEL[stage]}
-              </span>
-            </li>
-          )
-        })}
-      </ol>
+                <span
+                  className={cn(
+                    'grid size-7 place-items-center rounded-full border text-xs transition-shadow duration-200',
+                    done &&
+                      'border-status-done/30 bg-status-done/15 text-status-done glow-sm',
+                    active &&
+                      'pulse-dot border-brand/40 bg-accent text-brand glow-sm',
+                    !done &&
+                      !active &&
+                      'border-border bg-surface text-muted-foreground',
+                  )}
+                  style={
+                    active
+                      ? ({ '--glow-soft': 'rgba(59,91,255,0.55)' } as CSSProperties)
+                      : undefined
+                  }
+                >
+                  {done ? (
+                    <Check className="size-3.5" />
+                  ) : active ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <span className="font-mono">{i + 1}</span>
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    'text-xs',
+                    active ? 'font-medium text-foreground' : 'text-muted-foreground',
+                  )}
+                >
+                  {STAGE_LABEL[stage]}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      </div>
 
       {status?.stage === 'error' ? (
         <motion.p

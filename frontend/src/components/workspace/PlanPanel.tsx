@@ -116,7 +116,10 @@ export function PlanPanel({
       <div className="flex items-center gap-4 rounded-xl border border-border bg-background p-4">
         <div
           className="relative grid size-20 shrink-0 place-items-center rounded-full"
-          style={{ background: gradient }}
+          style={{
+            background: gradient,
+            boxShadow: '0 0 22px -4px rgba(59,91,255,0.5)',
+          }}
           aria-hidden
         >
           <div className="grid size-12 place-items-center rounded-full bg-background">
@@ -128,7 +131,10 @@ export function PlanPanel({
             <div key={status} className="flex items-center gap-2">
               <span
                 className="size-2.5 rounded-full"
-                style={{ backgroundColor: PLAN_STATUS_META[status].color }}
+                style={{
+                  backgroundColor: PLAN_STATUS_META[status].color,
+                  boxShadow: `0 0 8px 1px ${PLAN_STATUS_META[status].color}`,
+                }}
               />
               <span className="text-xs text-muted-foreground">
                 {PLAN_STATUS_META[status].label}
@@ -162,6 +168,8 @@ export function PlanPanel({
                   )}
                   style={{
                     borderLeftColor: PLAN_STATUS_META[item.status].color,
+                    boxShadow: `-6px 0 18px -12px ${PLAN_STATUS_META[item.status].color}`,
+                    transition: 'box-shadow 200ms ease',
                   }}
                 >
                   <div className="flex items-start gap-2">

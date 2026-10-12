@@ -314,6 +314,28 @@
   }
 }
 
+/* ---- Glowing progress fill ---------------------------------------------- */
+.progress-glow {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #3b5bff, #7c5cff 55%, #22d3ee);
+  box-shadow: 0 0 12px -2px rgba(59, 91, 255, 0.8);
+}
+.progress-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 60%
+  );
+  transform: translateX(-120%);
+  animation: shimmer-sweep 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
 /* ---- Grain + dot grid overlays ----------------------------------------- */
 .noise::after {
   content: '';

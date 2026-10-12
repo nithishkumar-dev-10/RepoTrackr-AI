@@ -54,11 +54,11 @@ export function CommandBar({
       <Button
         variant="outline"
         onClick={() => setOpen(true)}
-        className="w-full justify-start gap-2 text-muted-foreground sm:w-72"
+        className="glass w-full justify-start gap-2 text-muted-foreground transition-shadow duration-200 hover:glow-md sm:w-72"
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Ask about this repo</span>
-        <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+        <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground shadow-[0_0_10px_-2px_rgba(59,91,255,0.6)]">
           ⌘K
         </kbd>
       </Button>
@@ -67,7 +67,7 @@ export function CommandBar({
         <DialogContent>
           <DialogTitle className="sr-only">Ask about this repo</DialogTitle>
           <form onSubmit={submit}>
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-background px-3">
+            <div className="glass flex items-center gap-2 rounded-xl border border-border px-3 transition-[border-color,box-shadow] duration-200 focus-within:border-brand/50 focus-within:glow-md">
               <Search className="size-4 text-muted-foreground" />
               <input
                 autoFocus

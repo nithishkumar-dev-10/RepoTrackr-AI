@@ -44,7 +44,7 @@ export function ModeTabs({
             {active ? (
               <motion.span
                 layoutId="mode-tab-indicator"
-                className="absolute inset-0 rounded-lg bg-surface shadow-sm"
+                className="absolute inset-0 rounded-lg bg-surface shadow-sm glow-sm"
                 transition={{ type: 'spring', stiffness: 420, damping: 34 }}
               />
             ) : null}

@@ -32,7 +32,7 @@ function Toggle<T extends string>({
           className={cn(
             'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors',
             value === id
-              ? 'bg-white/10 text-white'
+              ? 'bg-white/10 text-white shadow-[0_0_12px_-2px_rgba(124,147,255,0.7)]'
               : 'text-slate-400 hover:text-white',
           )}
         >
@@ -144,7 +144,21 @@ export function GraphView({
   }
 
   return (
-    <div className="relative h-full w-full bg-canvas">
+    <div
+      className="relative h-full w-full overflow-hidden bg-canvas"
+      style={{
+        boxShadow:
+          'inset 0 0 0 1px rgba(255,255,255,0.06), inset 0 1px 0 0 rgba(255,255,255,0.08), 0 0 70px -12px rgba(59,91,255,0.4)',
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px"
+        style={{
+          background:
+            'linear-gradient(90deg, transparent, rgba(124,147,255,0.7), transparent)',
+        }}
+      />
       <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between p-3">
         <Toggle
           value={view}

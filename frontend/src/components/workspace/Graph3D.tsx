@@ -2,8 +2,9 @@ import { Line, OrbitControls, Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { Mesh } from 'three'
+import type { Mesh, MeshBasicMaterial } from 'three'
 import * as THREE from 'three'
+import type { Line2 } from 'three-stdlib'
 
 import type { ClusterCenter, PositionedNode } from '@/lib/graphLayout'
 import type { GraphEdge, PlanItemStatus } from '@/types'
@@ -36,6 +37,82 @@ function CameraRig({ path, enabled }: { path: PositionedNode[]; enabled: boolean
   })
 
   return null
+}
+
+/** Expanding glow ring that marks the selected node. */
+function PulseRing({ radius }: { radius: number }) {
+  const ref = useRef<Mesh>(null)
+  const mat = useRef<MeshBasicMaterial>(null)
+  useFrame((state) => {
+    if (!ref.current || !mat.current) return
+    const p = (state.clock.elapsedTime % 1.6) / 1.6
+    const s = 1 + p * 1.5
+    ref.current.scale.set(s, s, s)
+    mat.current.opacity = (1 - p) * 0.85
+  })
+  return (
+    <mesh ref={ref} rotation={[Math.PI / 2, 0, 0]}>
+      <torusGeometry args={[radius + 0.9, 0.09, 8, 48]} />
+      <meshBasicMaterial
+        ref={mat}
+        color="#BFD0FF"
+        transparent
+        toneMapped={false}
+      />
+    </mesh>
+  )
+}
+
+/** A light pulse that travels the reading path once the path is active. */
+function PathPulse({ path }: { path: PositionedNode[] }) {
+  const ref = useRef<Mesh>(null)
+  const t = useRef(0)
+  useFrame((_, delta) => {
+    if (!ref.current || path.length < 2) return
+    t.current = (t.current + delta * 0.14) % 1
+    const seg = t.current * (path.length - 1)
+    const i = Math.min(path.length - 2, Math.floor(seg))
+    const f = seg - i
+    const a = path[i]
+    const b = path[i + 1]
+    ref.current.position.set(
+      a.x + (b.x - a.x) * f,
+      a.y + (b.y - a.y) * f,
+      a.z + (b.z - a.z) * f,
+    )
+  })
+  if (path.length < 2) return null
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[0.6, 16, 16]} />
+      <meshBasicMaterial color="#CFDBFF" toneMapped={false} />
+    </mesh>
+  )
+}
+
+/** Animated dashed beam for the reading-path edges (flowing evidence). */
+function FlowingBeam({ points }: { points: PositionedNode[] }) {
+  const ref = useRef<Line2>(null)
+  useFrame(() => {
+    const material = ref.current?.material
+    if (material && 'dashOffset' in material) {
+      material.dashOffset -= 0.02
+    }
+  })
+  if (points.length < 2) return null
+  return (
+    <Line
+      ref={ref}
+      points={points.map((n) => [n.x, n.y, n.z])}
+      color="#6D8BFF"
+      lineWidth={1.4}
+      transparent
+      opacity={0.85}
+      dashed
+      dashSize={0.8}
+      gapSize={0.75}
+    />
+  )
 }
 
 function Node({
@@ -75,7 +152,7 @@ function Node({
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={selected || highlighted ? 0.9 : 0.35}
+          emissiveIntensity={selected || highlighted ? 1.3 : 0.55}
           transparent
           opacity={dimmed ? 0.18 : 1}
           roughness={0.4}
@@ -87,6 +164,7 @@ function Node({
           <meshBasicMaterial color="#E4E7EF" transparent opacity={0.6} />
         </mesh>
       ) : null}
+      {selected ? <PulseRing radius={radius} /> : null}
     </group>
   )
 }
@@ -145,6 +223,14 @@ function Scene({
         if (!a || !b) return null
         const inPath =
           readingOrder?.includes(edge.source) && readingOrder?.includes(edge.target)
+        if (inPath) {
+          return (
+            <FlowingBeam
+              key={`${edge.source}-${edge.target}-${i}`}
+              points={[a, b]}
+            />
+          )
+        }
         return (
           <Line
             key={`${edge.source}-${edge.target}-${i}`}
@@ -152,13 +238,28 @@ function Scene({
               [a.x, a.y, a.z],
               [b.x, b.y, b.z],
             ]}
-            color={inPath ? '#6D8BFF' : '#475569'}
-            lineWidth={inPath ? 1.4 : 0.6}
+            color="#475569"
+            lineWidth={0.6}
             transparent
-            opacity={dimming && !inPath ? 0.12 : inPath ? 0.8 : 0.32}
+            opacity={dimming ? 0.12 : 0.32}
           />
         )
       })}
+
+      {clusters.map((c) => (
+        <mesh key={`halo-${c.id}`} position={[c.x, c.y, c.z]}>
+          <sphereGeometry args={[9, 16, 16]} />
+          <meshBasicMaterial
+            color={c.color}
+            transparent
+            opacity={0.055}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+
+      {autoFly ? <PathPulse path={readingPath} /> : null}
 
       {nodes.map((node) => {
         const status = nodeStatus?.get(node.id)
@@ -203,7 +304,13 @@ function Scene({
       ) : null}
 
       <EffectComposer>
-        <Bloom luminanceThreshold={0.25} intensity={0.7} mipmapBlur />
+        <Bloom
+          luminanceThreshold={0.32}
+          luminanceSmoothing={0.22}
+          intensity={1.15}
+          radius={0.72}
+          mipmapBlur
+        />
       </EffectComposer>
     </>
   )
