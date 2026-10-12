@@ -34,11 +34,11 @@ export function FloatingInput({
           placeholder=" "
           aria-invalid={error ? true : undefined}
           className={cn(
-            'peer h-12 w-full rounded-xl border bg-surface px-3.5 pb-1 pt-5 text-sm text-foreground transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-ring/60',
+            'peer h-12 w-full rounded-xl border bg-surface px-3.5 pb-1 pt-5 text-sm text-foreground transition-[color,border-color,box-shadow] duration-200',
+            'focus:outline-none focus:ring-2 focus:ring-ring/50 focus:glow-sm',
             isPassword && 'pr-11',
             error
-              ? 'border-destructive focus:ring-destructive/40'
+              ? 'border-destructive focus:ring-destructive/40 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.14)]'
               : 'border-input focus:border-brand',
             className,
           )}

@@ -7,6 +7,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { resendVerification, verifyEmail } from '@/api/auth'
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout'
 import { FloatingInput } from '@/components/auth/FloatingInput'
+import { SuccessRipple } from '@/components/GlowRipple'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/context/ToastContext'
@@ -104,14 +105,17 @@ export default function VerifyEmail() {
           animate={{ opacity: 1, scale: 1 }}
           className="space-y-4"
         >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-            className="grid size-14 place-items-center rounded-full bg-status-done/15 text-status-done"
-          >
-            <CheckCircle2 className="size-7" />
-          </motion.div>
+          <div className="relative inline-grid">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 16 }}
+              className="grid size-14 place-items-center rounded-full bg-status-done/15 text-status-done glow-sm"
+            >
+              <CheckCircle2 className="size-7" />
+            </motion.div>
+            <SuccessRipple show className="rounded-full" />
+          </div>
           <Alert variant="success">
             <CheckCircle2 />
             <AlertDescription>{message || 'Email verified. You can now log in.'}</AlertDescription>

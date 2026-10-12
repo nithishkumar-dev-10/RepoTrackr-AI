@@ -7,6 +7,8 @@ import { Link } from 'react-router-dom'
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout'
 import { FloatingInput } from '@/components/auth/FloatingInput'
 import { PasswordStrength } from '@/components/auth/PasswordStrength'
+import { GlowButton } from '@/components/GlowButton'
+import { SuccessRipple } from '@/components/GlowRipple'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/AuthContext'
@@ -94,8 +96,9 @@ export default function Signup() {
           animate={{ opacity: 1, scale: 1 }}
           className="space-y-4"
         >
-          <div className="grid size-12 place-items-center rounded-full bg-status-done/15 text-status-done">
+          <div className="relative grid size-12 place-items-center rounded-full bg-status-done/15 text-status-done glow-sm">
             <MailCheck className="size-6" />
+            <SuccessRipple show className="rounded-full" />
           </div>
           <Alert variant="success">
             <MailCheck />
@@ -201,25 +204,28 @@ export default function Signup() {
           </Alert>
         ) : null}
 
-        <Button
-          type="submit"
-          variant="brand"
-          size="lg"
-          className="w-full"
-          disabled={submitting}
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Creating account…
-            </>
-          ) : (
-            <>
-              Create account
-              <ArrowRight className="size-4" />
-            </>
-          )}
-        </Button>
+        <div className="relative">
+          <GlowButton
+            type="submit"
+            variant="brand"
+            size="lg"
+            className="w-full"
+            magnetic={false}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Creating account…
+              </>
+            ) : (
+              <>
+                Create account
+                <ArrowRight className="size-4" />
+              </>
+            )}
+          </GlowButton>
+        </div>
         <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <Check className="size-3.5 text-status-done" />
           We’ll email you a link to verify your account.

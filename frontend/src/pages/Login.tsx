@@ -6,8 +6,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout'
 import { FloatingInput } from '@/components/auth/FloatingInput'
+import { GlowButton } from '@/components/GlowButton'
+import { SuccessRipple } from '@/components/GlowRipple'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { describeAuthError } from '@/lib/authErrors'
@@ -130,30 +131,34 @@ export default function Login() {
           </Alert>
         ) : null}
 
-        <Button
-          type="submit"
-          variant="brand"
-          size="lg"
-          className="w-full"
-          disabled={submitting || success}
-        >
-          {success ? (
-            <>
-              <Check className="size-4" />
-              Logged in
-            </>
-          ) : submitting ? (
-            <>
-              <Loader2 className="size-4 animate-spin" />
-              Logging in…
-            </>
-          ) : (
-            <>
-              Log in
-              <ArrowRight className="size-4" />
-            </>
-          )}
-        </Button>
+        <div className="relative">
+          <GlowButton
+            type="submit"
+            variant="brand"
+            size="lg"
+            className="w-full"
+            magnetic={false}
+            disabled={submitting || success}
+          >
+            {success ? (
+              <>
+                <Check className="size-4" />
+                Logged in
+              </>
+            ) : submitting ? (
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Logging in…
+              </>
+            ) : (
+              <>
+                Log in
+                <ArrowRight className="size-4" />
+              </>
+            )}
+          </GlowButton>
+          <SuccessRipple show={success} />
+        </div>
 
         <p className="text-center text-xs text-muted-foreground">
           Can’t log in?{' '}
