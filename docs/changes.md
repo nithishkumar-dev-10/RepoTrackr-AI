@@ -302,3 +302,67 @@ Every step appends an entry here. Never delete old entries.
   - Docker Compose (optional) was skipped: no Dockerfile yet and it would be unverified, so it is left empty rather than documented as working.
   - The Postman collection's sample values are schema placeholders (`<string>`, `<email>`); use `docs/mock_responses.md` for realistic bodies.
   - Stub request bodies are validated for shape only (`StubQueryRequest`, required plan file); nothing is processed.
+
+---
+
+## Frontend build - full React app (phases 1-8)
+
+- **Date:** 2026-10-12
+- **Branch:** `frontend-redesign`; one commit per phase after the Step 0.3 base (`5dd0ffe`).
+- **Files created (all under `frontend/`, nothing outside it was edited until this docs entry):**
+  - Tooling/config: `frontend/package.json`, `vite.config.ts`, `tsconfig*.json`, `.oxlintrc.json`, `components.json`, `index.html`, `README.md`, `.env.example`, `public/favicon.svg`, `public/icons.svg`.
+  - Entry + theme: `src/main.tsx` (providers + `MotionConfig reducedMotion="user"`), `src/App.tsx` (routes), `src/index.css` (design tokens).
+  - API + mocks + types: `src/api/client.ts` (fetch wrapper, bearer token, 401 refresh-retry, error envelope, **new API activity logging**), `src/api/auth.ts`, `src/api/repos.ts`, `src/api/galaxy.ts` (single boundary that tries the real endpoint then falls back to mock data with a `demo` flag), `src/mock/*` (typed mocks, moved out of `src/api/mock/`), `src/types/*`.
+  - Libs: `src/lib/env.ts`, `utils.ts`, `tokenStorage.ts`, `motion.ts`, `validation.ts`, `authErrors.ts`, `github.ts`, `graphLayout.ts`, `planStatus.ts`, `endpoints.ts`, `apiLog.ts`.
+  - Contexts/components: `src/context/AuthContext.tsx`, `ToastContext.tsx`; `src/components/{AppLayout,Navbar,Logo,guards,PageTransition,Counter,ScrollReveal,MagneticButton,SpotlightCard,CitationChip}.tsx`; `src/components/ui/*` (Radix-based primitives incl. new `dialog.tsx`).
+  - Landing: `src/components/landing/{MiniGraph,InteractiveDemo,FeatureCards,PipelineSection}.tsx`.
+  - Auth: `src/components/auth/{FloatingInput,PasswordStrength,NodeNetwork,AuthSplitLayout}.tsx`.
+  - Dashboard: `src/components/dashboard/{MiniGraphThumb,TrackRepoModal,RepoCard}.tsx`.
+  - Workspace: `src/components/workspace/{ModeTabs,StageTimeline,CommandBar,GraphView,Graph2D,Graph3D,GraphList,GraphCanvas->CanvasErrorBoundary,CodeBlock,ReaderPanel,PlanPanel,ContextPanel,ModePanel,NodeInspector}.tsx`.
+  - Pages: `src/pages/{Landing,Signup,Login,VerifyEmail,Dashboard,RepoWorkspace,Developer,NotFound}.tsx`.
+- **Files deleted:** `frontend/_draft/` (it existed but was empty, so there was nothing to port from it).
+- **What changed and why:** Built the entire browser client against the existing FastAPI backend. Phase 1 (pre-existing) + Phase 2 established the routing shell, auth context, navbar and page transitions; Phase 3 the landing page with an interactive demo and a scroll-driven pipeline; Phase 4 the signup/login/verify-email pages; Phase 5 the dashboard (track-repo modal + repo cards + staged status); Phase 6 the repo workspace (dark 3D galaxy canvas on the left, resizable light panel on the right, Reader/Plan/Context tabs, ⌘K command bar, staged indexing timeline, 2D/List fallbacks); Phase 7 the three query modes (Reader reading-order with shiki snippets, Plan status ring + evidence, Context token budget + tiers + copyable prompt); Phase 8 the Developer page (endpoint catalog + live API activity inspector) plus polish (mobile layout, `prefers-reduced-motion`, and a WebGL error boundary that degrades to the 2D graph).
+- **Design rule honoured:** deterministic analysis is the source of truth; the UI only explains and every claim shows a `file:line` citation. Copy avoids "zero hallucinations"/"deterministic query modes" in favour of "Every claim cites real code (file:line)." and "Static analysis decides what is true. AI only retrieves and explains."
+- **New commands / env variables / endpoints / migrations:**
+  - New env var for the frontend: `VITE_API_URL` (default `http://localhost:8000`); documented in `frontend/.env.example` (a real `frontend/.env` is gitignored). No secret is committed.
+  - Frontend commands (from `frontend/`): `npm install`, `npm run dev` (Vite on `http://localhost:5173`), `npm run build`, `npm run typecheck`, `npm run lint`.
+  - No backend endpoints, migrations or dependencies were added.
+- **Backend CORS note (needs a config change, NOT made here):** the Vite dev server runs on `http://localhost:5173`, but `backend/.env.example` / `Settings.CORS_ORIGINS` default to `http://localhost:3000`. To let the browser call the API during development, set `CORS_ORIGINS` in `backend/.env` to include `http://localhost:5173` (and `http://127.0.0.1:5173`). The backend was left untouched per the task rules.
+- **Known issues / TODOs:**
+  - Endpoints the backend still returns `501` for (index, index/status, index/summary, plan, reader, context, query, agent/trace, evals) are shown with a visible **"Demo data"** badge; the app calls the real route first and falls back to typed mock data.
+  - `npm run build` passes; the only build output is the expected "chunks larger than 500 kB" warning (the 3D canvas and Mermaid are lazy-loaded into separate chunks).
+  - Lint is warning-only (no errors): three pre-existing shadcn warnings plus benign `set-state-in-effect` warnings from data-loading effects.
+  - `GET /repos` has no pagination yet, so the dashboard lists everything the user has tracked.
+
+---
+
+## Pipeline PHASE 1 - Safe clone
+
+- **Date:** 2026-10-17
+- **Files created:**
+  - `backend/app/pipeline/clone/clone.py` - `safe_clone(url, CloneConfig)`: URL validation, shallow clone (`--depth 1 --single-branch --no-tags`), commit-SHA read, size/timeout enforcement, secret stripping.
+  - `backend/app/pipeline/clone/errors.py` - `CloneError` + `CloneErrorCode` (`invalid_url`, `git_not_found`, `git_failed`, `timeout`, `size_exceeded`, `empty_repo`).
+  - `backend/app/pipeline/clone/filters.py` - `SKIP_DIR_NAMES`, secret-file detection (`is_secret_file`, `is_skipped_dir`) and `clean_repo()`.
+  - `backend/app/pipeline/clone/models.py` - `CloneConfig` and `CloneResult` (Pydantic).
+  - `backend/tests/pipeline/__init__.py`, `backend/tests/pipeline/conftest.py` (offline `make_git_repo()` / `repo_url` fixtures using local `file://` repos), `backend/tests/pipeline/test_clone.py` (29 tests).
+  - `backend/alembic/versions/09282e667a32_add_commit_sha_to_repos.py` - migration adding `repos.commit_sha`.
+- **Files modified:**
+  - `backend/app/core/config.py` - added `CLONE_ROOT` (`data/clones`), `CLONE_MAX_SIZE_MB` (200), `CLONE_TIMEOUT_SECONDS` (120).
+  - `backend/.env.example` - documented the three new clone variables.
+  - `backend/app/models/repo.py` - added nullable `commit_sha` column (`String(64)`).
+  - `backend/app/schemas/repo.py` - `RepoOut.commit_sha: str | None = None`.
+  - `backend/app/pipeline/clone/__init__.py` - re-exports the clone public API.
+  - `.gitignore` - added `backend/data/` for the runtime clone sandbox.
+  - `docs/project_summary.md` - tree, Layers 3/4/5, intro, status, env vars, commands, help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Implemented the first deterministic pipeline step: a repository URL becomes a local, secrets-free folder plus its 40-char commit SHA. The clone is sandboxed (hooks and template dirs disabled, shell bypassed, no repo code executed), shallow, and bounded by size and time limits that fail cleanly with a typed `CloneError`. `.git`, ignored dirs (`node_modules`, `venv`, `.venv`, `__pycache__`, ...) and secret files (`.env`, `*.pem`, `*.key`, `id_rsa`, ...) are removed after the SHA is read; `.env.example`-style templates are kept. The commit SHA can now be saved on the `Repo` row.
+- **New commands / env variables / endpoints / migrations:**
+  - Env vars: `CLONE_ROOT`, `CLONE_MAX_SIZE_MB`, `CLONE_TIMEOUT_SECONDS`.
+  - Migration: `09282e667a32` adds `repos.commit_sha` (batched `ALTER TABLE`, SQLite-safe).
+  - Test command: `python -m pytest tests/pipeline/test_clone.py -q` (29 passed); full suite `python -m pytest -q` (132 passed).
+  - No new Python dependencies (stdlib `subprocess`/`shutil`/`pathlib` + existing Pydantic); the `git` binary is required at runtime and for the tests.
+  - No HTTP endpoint added yet.
+- **Known issues / TODOs:**
+  - `safe_clone` is not yet wired to the indexing endpoint or a background task, so the SHA is not yet persisted to a `Repo` row by the app (the column and migration are ready).
+  - The pre-clone GitHub size probe calls `api.github.com` best-effort; if it is unreachable the clone still proceeds and is checked after cloning instead.
+  - `data/clones/` is gitignored and can be safely deleted to reset the sandbox.

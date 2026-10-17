@@ -1,15 +1,15 @@
 # Project Summary
 
 ## What This Project Is
-RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. Right now the foundation exists — settings, the database engine, the SQLAlchemy models, the first Alembic migration, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh, logout, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). Every Part 2–4 endpoint is also registered as a stub that verifies repo ownership and returns `501 {"status": "not_implemented"}`, so the frontend is already wired. The deterministic pipeline, analysis, AI and frontend are still scaffolded but empty.
+RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. Right now only the foundation exists — settings, the database engine, the SQLAlchemy models, and the first Alembic migration. The folders for the pipeline, analysis, AI, HTTP API, frontend, Docker and evals are all scaffolded but empty.
 
 ## Project Structure
 ```
 RepoTrackr-AI/
 ├── .gitignore                       # Ignores Python/venv/secrets/DB/frontend junk
 ├── AGENTS.md                        # Working rules for contributors/agents
-├── README.md                        # Setup, run, test, folder map, docs links
-├── project_summary.md               # Legacy copy; canonical doc is docs/project_summary.md
+├── README.md                        # Empty; not written yet
+├── project_summary.md               # This file
 ├── backend/
 │   ├── .env                         # Real local secrets/settings (gitignored)
 │   ├── .env.example                 # Template for backend/.env
@@ -24,43 +24,26 @@ RepoTrackr-AI/
 │   │       └── 9dbee76d77e4_create_users_email_tokens_repos.py  # First migration
 │   ├── app/
 │   │   ├── __init__.py              # Empty package marker
-│   │   ├── main.py                  # FastAPI app factory: create_app(), CORS, error handlers, GET /health
+│   │   ├── main.py                  # FastAPI app factory — empty, not built
 │   │   ├── core/
 │   │   │   ├── __init__.py          # Empty package marker
 │   │   │   ├── config.py            # Settings class + cached get_settings()
-│   │   │   ├── database.py          # Engine, Base, SessionLocal, get_db()
-│   │   │   ├── email.py             # send_email (SMTP/dev console), verify + reset email helpers
-│   │   │   └── ratelimit.py         # slowapi Limiter (per-IP) used by auth endpoints
+│   │   │   └── database.py          # Engine, Base, SessionLocal, get_db()
 │   │   ├── models/
 │   │   │   ├── __init__.py          # Re-exports User, EmailToken, Repo
 │   │   │   ├── user.py              # User table + relationships
 │   │   │   ├── email_token.py       # EmailToken table + EmailTokenType enum
 │   │   │   └── repo.py              # Repo table
-│   │   ├── schemas/
-│   │   │   ├── __init__.py          # Re-exports all schemas
-│   │   │   ├── common.py            # ErrorDetail, ErrorResponse, MessageResponse
-│   │   │   ├── auth.py              # Auth request/response schemas + password rule
-│   │   │   ├── repo.py              # RepoCreate/RepoOut/RepoListOut + GitHub URL parse
-│   │   │   └── stub.py              # StubQueryRequest ({query, mode}) for the Part 3 stubs
-│   │   ├── security/
-│   │   │   ├── __init__.py          # Re-exports password/JWT/email-token helpers
-│   │   │   ├── passwords.py         # hash_password, verify_password (argon2)
-│   │   │   ├── tokens.py            # JWT access/refresh create + decode_token
-│   │   │   └── email_tokens.py      # verify/reset token generate/hash/expiry
+│   │   ├── schemas/__init__.py      # Empty — Pydantic request/response models
+│   │   ├── security/__init__.py     # Empty — password/JWT helpers
 │   │   ├── features/
 │   │   │   ├── __init__.py          # Empty package marker
-│   │   │   ├── auth/
-│   │   │   │   ├── __init__.py      # Empty package marker
-│   │   │   │   ├── dependencies.py  # get_current_user Bearer access-token dependency
-│   │   │   │   └── router.py        # signup, verify, resend, login, refresh, logout, forgot/reset/change password, delete account, /me
-│   │   │   ├── repos/
-│   │   │   │   ├── __init__.py      # Empty package marker
-│   │   │   │   ├── dependencies.py  # get_owned_repo: 404 unless the repo belongs to the caller
-│   │   │   │   └── router.py        # add/list/get/delete my repos (auth required)
-│   │   │   ├── plan/router.py       # Stub: POST/GET /repos/{id}/plan (501)
-│   │   │   ├── indexing/router.py   # Stubs: POST /repos/{id}/index + status/summary (501)
-│   │   │   ├── context/router.py    # Stubs: POST /repos/{id}/context + /query (501)
-│   │   │   └── reader/router.py     # Stub: GET /repos/{id}/reader (501)
+│   │   │   ├── auth/__init__.py     # Empty — signup/login/verify endpoints
+│   │   │   ├── repos/__init__.py    # Empty — add/list repo endpoints
+│   │   │   ├── plan/__init__.py     # Empty — plan feature
+│   │   │   ├── indexing/__init__.py # Empty — indexing trigger/status
+│   │   │   ├── context/__init__.py  # Empty — context packing feature
+│   │   │   └── reader/__init__.py   # Empty — reader feature
 │   │   ├── pipeline/
 │   │   │   ├── __init__.py          # Empty package marker
 │   │   │   ├── clone/__init__.py    # Empty — clone repos
@@ -79,26 +62,12 @@ RepoTrackr-AI/
 │   │   │   ├── embeddings/__init__.py    # Empty — embeddings
 │   │   │   ├── prompts/__init__.py       # Empty — prompt templates
 │   │   │   └── router/__init__.py        # Empty — model routing
-│   │   ├── agent/
-│   │   │   ├── __init__.py          # Empty package marker
-│   │   │   └── router.py            # Stub: GET /repos/{id}/agent/trace (501)
+│   │   ├── agent/__init__.py        # Empty — AI agent/tool loop
 │   │   └── tasks/__init__.py        # Empty — background jobs
-│   └── tests/
-│       ├── __init__.py              # Test package marker
-│       ├── conftest.py              # Test env vars + temp DB, TestClient and fixtures
-│       ├── test_security.py         # Security unit tests
-│       ├── test_auth.py             # Auth endpoint tests (signup/verify/login/refresh/logout/reset/change/delete/rate limit)
-│       ├── test_repos.py            # Repo CRUD endpoint tests
-│       └── test_stubs.py            # Part 2-4 stub tests (501 / 401 / 404)
+│   └── tests/__init__.py            # Empty test package
 ├── docker/
 │   └── docker-compose.yml           # Empty; no Dockerfile yet
 ├── docs/
-│   ├── RepoTrackr-AI-Execution-Plan.md  # Source-of-truth roadmap (Parts 1-4)
-│   ├── project_summary.md           # This file (canonical)
-│   ├── api_contract.md              # Endpoint contract for Parts 1-4
-│   ├── mock_responses.md            # Example JSON for frontend mocks
-│   ├── openapi.json                 # Generated OpenAPI 3.1 spec
-│   ├── postman_collection.json      # Postman collection generated from the spec
 │   └── changes.md                   # Step-by-step change log (all history)
 ├── evals/
 │   ├── .gitkeep
@@ -115,7 +84,7 @@ RepoTrackr-AI/
 ## The Stack at a Glance
 Settings -> Database Core -> Data Models -> Schema Migrations (Alembic) -> Pipeline & Analysis -> AI Layer -> Features & HTTP API -> Frontend, with Docker/Evals/Scripts as supporting tooling.
 
-(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, the complete auth feature with rate limiting, the repo-records feature (add/list/get/delete), the Part 2–4 stub endpoints, the Pydantic schemas, the endpoint/mock/OpenAPI/Postman contract, and the `security` helpers (password hashing, JWT, email tokens), plus unit and endpoint tests. Everything above Layer 7 is an empty folder skeleton.)
+(Only the first four layers below actually have code. Everything above is an empty folder skeleton.)
 
 ## Layer by Layer
 
@@ -389,11 +358,11 @@ Reserved for background jobs (e.g. running the pipeline out-of-band).
 
 **What it is:** The folder skeleton reserved for the LLM side — embeddings, prompt templates, model routing, and the agent/tool loop.
 **Why it exists:** The design rule says the AI only retrieves, reasons over evidence, and explains; keeping it isolated makes that boundary explicit and lets the rest of the app work when the AI is unavailable.
-**Files in it:** `backend/app/ai/embeddings/__init__.py`, `backend/app/ai/prompts/__init__.py`, `backend/app/ai/router/__init__.py`, `backend/app/agent/__init__.py`, and `backend/app/agent/router.py` (the `GET /repos/{repo_id}/agent/trace` stub).
+**Files in it:** `backend/app/ai/embeddings/__init__.py`, `backend/app/ai/prompts/__init__.py`, `backend/app/ai/router/__init__.py`, `backend/app/agent/__init__.py`.
 **Depends on:** Layer 5 (deterministic evidence) — by design it must not invent facts on its own.
 **Used by:** the future HTTP API.
 
-*Not implemented yet. The `ai/` files are empty `__init__.py` markers; `agent/router.py` only registers the `501` trace stub.*
+*Not implemented yet. Every file listed is an empty `__init__.py` package marker.*
 
 #### Study Notes for this layer
 
@@ -427,175 +396,67 @@ Reserved for the loop where the model calls tools over retrieved evidence.
 
 **What it is:** The folder skeleton for the FastAPI application: the app object, request/response schemas, security helpers, and the per-feature route modules.
 **Why it exists:** It is the top edge the outside world talks to; keeping endpoints grouped by feature keeps routing readable as the app grows.
-**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, rate-limit handler, and `GET /health` plus the `GET /evals` stub), `backend/app/core/email.py` (SMTP sending with a dev console fallback, and verification/reset email helpers), `backend/app/core/ratelimit.py` (the slowapi `Limiter`), `backend/app/schemas/{__init__,common,auth,repo,stub}.py` (the Pydantic request/response models), `backend/app/security/{__init__,passwords,tokens,email_tokens}.py` (password hashing, JWT, email-token helpers), `backend/app/features/auth/{__init__,dependencies,router}.py` (the complete auth feature), `backend/app/features/repos/{__init__,dependencies,router}.py` (the repo-records feature plus the shared `get_owned_repo` dependency), and the Part 2–4 stub routers `backend/app/features/{indexing,plan,reader,context}/router.py` and `backend/app/agent/router.py`.
+**Files in it:** `backend/app/main.py` (app factory — empty), `backend/app/schemas/__init__.py`, `backend/app/security/__init__.py`, and `backend/app/features/{auth,repos,plan,indexing,context,reader}/__init__.py`.
 **Depends on:** Layers 1–4 (config, DB, models, migrations) and, once built, Layers 5–6.
 **Used by:** the frontend and any external client.
 
-*Part 1 is complete on the backend. `main.py` defines the app, `GET /health`, the rate-limit handling and the `GET /evals` stub, `schemas/` defines all Part 1 models plus the documented contract, `security/` implements password hashing, JWT and email-token helpers, `core/email.py` sends mail, `core/ratelimit.py` provides the limiter, `features/auth/` implements every Part 1 auth endpoint, `features/repos/` implements repo CRUD, and the Part 2–4 routers register every remaining endpoint as an ownership-checked `501` stub. The deterministic pipeline, analysis and AI layers above are still empty `__init__.py`.*
+*Not implemented yet. `main.py` is empty (no `app` object), and every feature/`schemas`/`security` file is an empty `__init__.py`.*
 
 #### Study Notes for this layer
 
 **What is `backend/app/main.py`?**
-The FastAPI app factory (`create_app()`) plus the module-level `app = create_app()` that uvicorn imports as `app.main:app`.
-*Why do we need it?* It builds the ASGI application, attaches CORS, the rate limiter and error handling, registers `GET /health` and `GET /evals`, and mounts the auth, repos and stub routers.
+The intended home of the FastAPI app factory.
+*Why do we need it?* Uvicorn needs an importable ASGI `app` to serve.
 *What breaks without it?* There is no server to run; `uvicorn app.main:app` cannot start.
-*Think of it as:* the front door of the building — it now exists and opens.
-
-**Why `create_app()` as a factory instead of a bare `app`?**
-It builds and configures a fresh `FastAPI` instance and returns it, with `app = create_app()` at module level for uvicorn.
-*Why do we need it?* Settings, middleware and handlers are applied in one obvious place, and tests can build isolated app instances.
-*What breaks without it?* Configuration would be scattered at import time with no clean seam to build or test the app.
-*Think of it as:* a recipe for assembling the store before opening, rather than a pre-built store you can't rearrange.
-
-**What is the CORS middleware doing here?**
-`add_middleware(CORSMiddleware, ...)` with `allow_origins=settings.CORS_ORIGINS` (plus all methods/headers and credentials).
-*Why do we need it?* The browser frontend is served from a different origin and needs the API to permit it.
-*What breaks without it?* The frontend's requests are blocked by the browser's same-origin policy.
-*Think of it as:* a guest list at the door naming exactly which websites may call in.
-
-**What are the global exception handlers?**
-Handlers for `RequestValidationError` (422), `StarletteHTTPException` (its status code), `RateLimitExceeded` (429), and `Exception` (500), all returning `{"error": {"code", "message", "details"?}}`.
-*Why do we need it?* Every error — including rate limiting — leaves the API in one consistent JSON shape instead of FastAPI's default `{"detail": ...}` or a raw traceback.
-*What breaks without it?* Clients would parse several error formats, and unhandled errors could leak internals (the unhandled handler logs the traceback server-side and returns only a generic message).
-*Think of it as:* a single standardized complaint form every department must use.
-
-**What is `GET /health`?**
-A dependency-free route returning `{"status": "ok"}`.
-*Why do we need it?* Load balancers, uptime checks and the team need a cheap liveness probe.
-*What breaks without it?* You can't tell at a glance whether the process is up.
-*Think of it as:* a doorman answering "yes, we're open" without walking you through the building.
+*Think of it as:* the front door of the building — not built yet.
 
 **What is `features/auth`?**
-The complete Part 1 auth feature: `router.py` implements `POST /auth/signup`, `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`, and `GET /auth/me`; `dependencies.py` provides the `get_current_user` dependency.
+Reserved for signup, login, email verification, and password reset endpoints.
 *Why do we need it?* Users need accounts, and the `User`/`EmailToken` models exist to support this.
 *What breaks without it?* No one can register or log in.
 *Think of it as:* the reception desk that issues your badge.
 
-**What does the auth `router.py` do?**
-It exposes the auth endpoints on an `APIRouter(prefix="/auth")`. Signup normalizes the email to lowercase, rejects duplicates (409), hashes the password, stores an unverified `User`, creates a `VERIFY` email token and sends the verification link. `verify-email` looks up the token by its hash and rejects invalid/expired/used tokens (400) before marking the user verified and the token used. `resend-verification` always returns the same 200 message (no account enumeration) and only sends when the account exists and is unverified, invalidating older unused verify tokens. `login` checks the password (401 on mismatch) and blocks unverified users (403) before issuing access + refresh tokens. `refresh` accepts only a refresh token (an access token is rejected 401), re-checks that the user still exists and is verified, and returns a new pair. `logout` confirms success but is client-side only (no revocation table). `forgot-password` always returns the same 200 message, and only for an existing user creates a single-use `RESET` token and sends the email in the background. `reset-password` validates a valid/unexpired/unused `RESET` token, applies the password rule, sets the new hash and stamps `used_at`. `change-password` verifies the current password, rejects reusing the old password, and sets the new hash. `delete-account` deletes the user (cascading to tokens and repos). `/auth/me` returns the current user.
-*Why do we need it?* It is the concrete account lifecycle the rest of the app is gated behind.
-*What breaks without it?* Accounts can't be created, recovered, or managed, so nothing downstream can be owned by a user.
-*Think of it as:* the reception desk that checks your ID, issues your badge, hands out reprints, and shreds your file when you leave.
-
-**What is `get_current_user`?**
-A FastAPI dependency in `features/auth/dependencies.py` that reads the `Authorization: Bearer <access_token>` header, decodes it as an access token via `decode_token`, loads the `User` by the token's subject, and returns it — raising a 401 `"Not authenticated"` for a missing, malformed, expired, wrong-type token or unknown user.
-*Why do we need it?* Protected routes (`/auth/me`, `/auth/logout`, `/auth/change-password`, `/auth/account`, and later repos) need one shared, tested way to turn a header into a user.
-*What breaks without it?* Every protected endpoint would re-implement token parsing and could drift or leak different errors.
-*Think of it as:* the bouncer who checks your wristband and lets you in as the person it names.
-
-**What is `core/email.py`?**
-The email service: `send_email()` sends via SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`EMAIL_FROM`), or, when `SMTP_HOST` is unset, logs the message to the console instead of sending (the dev fallback). `verification_link()`/`send_verification_email()` build and send the verification message; `reset_link()`/`send_reset_email()` do the same for password reset (links point at `FRONTEND_URL`).
-*Why do we need it?* Signup, resend and forgot-password must deliver links, but local dev has no mail server.
-*What breaks without it?* Emails can't be sent, and these flows can't be tested locally without real SMTP credentials.
-*Think of it as:* the mailroom — it posts letters when the post office is configured, and otherwise reads them aloud so you can still act.
-
-**What is `core/ratelimit.py`?**
-A slowapi `Limiter(key_func=get_remote_address)` that keys limits by client IP. The auth router decorates signup, login, forgot-password and resend-verification with `@limiter.limit(lambda: get_settings().RATE_LIMIT_*)`, and `main.py` attaches the limiter to `app.state.limiter` and registers a `RateLimitExceeded` handler that returns the standard 429 `http_error` `"Too many requests"` envelope. Limits come from `RATE_LIMIT_*` settings and are read per request.
-*Why do we need it?* Login/signup/forgot/resend are the endpoints most abused for password guessing and email spam.
-*What breaks without it?* Brute-force and enumeration attempts are unthrottled.
-*Think of it as:* a turnstile that only lets each visitor through a few times a minute.
-
 **What is `features/repos`?**
-The complete repo-records feature: `router.py` implements `POST /repos`, `GET /repos`, `GET /repos/{repo_id}`, and `DELETE /repos/{repo_id}`, all requiring a logged-in user, and `dependencies.py` provides the shared `get_owned_repo` dependency.
+Reserved for adding and listing repositories.
 *Why do we need it?* It is how a `Repo` row gets created so the pipeline has work.
-*What breaks without it?* Users can't submit, view or remove repos, so nothing downstream ever runs.
-*Think of it as:* the intake form at the front desk, plus the drawer where your submitted forms are kept.
-
-**What does the repos `router.py` do?**
-It exposes the four repo endpoints on an `APIRouter(prefix="/repos", tags=["repos"])`, each depending on `features/auth/dependencies.get_current_user`. `create` takes a `RepoCreate`, re-parses the URL with `parse_github_url`, lowercases `owner`/`name`/`url` (GitHub is case-insensitive), rejects a duplicate for the same user with 409 (checked in code and again via the `uq_user_repo_url` constraint on `IntegrityError`), and inserts a `Repo` with `status="added"`. `list` returns only the current user's rows newest first as `RepoListOut`. `get` and `delete` depend on `get_owned_repo`, so a repo that belongs to another user and a repo that does not exist both return the same 404 and ids cannot be probed. No network call and no cloning happen here — that is Part 2.
-*Why do we need it?* It is the whole "save a link" half of Part 1 and the only source of `Repo` rows.
-*What breaks without it?* There is no way to give the pipeline a repository.
-*Think of it as:* a librarian who records the book you hand over, lists only your shelf, and won't let you pull someone else's book.
-
-**What is `get_owned_repo`?**
-A FastAPI dependency in `features/repos/dependencies.py` that depends on `get_current_user` and `get_db`, loads the `Repo` where `id == repo_id` **and** `user_id == current_user.id`, and returns it — or raises 404 `"Repo not found"` for a missing row or one owned by someone else. The repos `get`/`delete` routes and every repo-scoped stub reuse it.
-*Why do we need it?* Ownership-scoped lookups appear in many endpoints; centralizing the "mine only, same 404 either way" rule prevents it from drifting and stops id probing.
-*What breaks without it?* Each endpoint would repeat the query and could leak whether a foreign repo exists.
-*Think of it as:* the librarian's rule — if the card isn't on your shelf, it simply doesn't exist to you.
+*What breaks without it?* Users can't submit repos, so nothing downstream ever runs.
+*Think of it as:* the intake form at the front desk.
 
 **What is `features/plan`?**
-Part 3's plan feature; for now a stub router (`router.py`) exposing `POST /repos/{repo_id}/plan` (accepts a multipart YAML file) and `GET /repos/{repo_id}/plan`, both returning `501 {"status": "not_implemented"}` after verifying the repo belongs to the caller.
-*Why do we need it?* It reserves the plan endpoints so the frontend can wire them now.
-*What breaks without it?* The frontend would have no plan routes to call, not even placeholders.
-*Think of it as:* a meeting room that is booked and labelled but has no furniture yet.
+Reserved for the plan feature.
+*Why do we need it?* It exposes plan generation/review over analyzed repos.
+*What breaks without it?* Plan functionality has no endpoint.
+*Think of it as:* the meeting room where plans get discussed.
 
 **What is `features/indexing`?**
-Part 2's indexing feature; for now a stub router exposing `POST /repos/{repo_id}/index`, `GET .../index/status`, and `GET .../index/summary`, all `501` after an ownership check.
-*Why do we need it?* It reserves the pipeline endpoints the frontend polls.
-*What breaks without it?* There is no route to start or watch indexing.
-*Think of it as:* a washing-machine button that is installed but not wired to the machine.
+Reserved for triggering indexing and reporting its status.
+*Why do we need it?* Users need to start and watch the pipeline.
+*What breaks without it?* Indexing can't be kicked off from the API.
+*Think of it as:* the button that starts the washing machine.
 
 **What is `features/context`?**
-Part 3's context/query feature; for now a stub router exposing `POST /repos/{repo_id}/context` and `POST /repos/{repo_id}/query` (each a JSON `StubQueryRequest` of `{query, mode}`), returning `501` after an ownership check.
-*Why do we need it?* It reserves the context-packing and intent-router endpoints.
-*What breaks without it?* Packed context and query routing have no entry points.
-*Think of it as:* a service window that is built but has nothing on the counter yet.
+Reserved for the context-packing feature endpoints.
+*Why do we need it?* It exposes the packer's results to clients.
+*What breaks without it?* Packed context has no way out of the system.
+*Think of it as:* the service window where a prepared order is handed over.
 
 **What is `features/reader`?**
-Part 3's reader feature; for now a stub router exposing `GET /repos/{repo_id}/reader`, returning `501` after an ownership check.
-*Why do we need it?* It reserves the reading-order endpoint.
-*What breaks without it?* Reading-order output has no route to be requested.
-*Think of it as:* a guided-tour desk that is staffed but has no itinerary yet.
+Reserved for the reader feature endpoints.
+*Why do we need it?* It exposes reader-order guidance.
+*What breaks without it?* Reading-order output can't be requested.
+*Think of it as:* a guided tour desk.
 
 **What is `schemas`?**
-The Pydantic request/response models for the API: `common.py` (error/message envelopes), `auth.py` (auth requests, `TokenResponse`, `UserOut`, password rule), `repo.py` (`RepoCreate`/`RepoOut`/`RepoListOut`, GitHub URL parsing), `stub.py` (`StubQueryRequest` = `{query, mode}` for the Part 3 stub endpoints), re-exported from `__init__.py`.
+Reserved for Pydantic request/response models.
 *Why do we need it?* ORM models must not leak straight to the API; schemas validate input and shape output.
 *What breaks without it?* No input validation or response contracts.
 *Think of it as:* customs forms that standardize what can cross the border.
 
-**What is `ErrorResponse` / `MessageResponse`?**
-`ErrorResponse` mirrors the app's error envelope (`{"error": {"code", "message", "details?"}}`); `MessageResponse` is a simple `{"message": str}` for confirmations.
-*Why do we need it?* They pin the one error shape the handlers in `main.py` already emit and give simple successes a type.
-*What breaks without it?* The error contract would live only in handler code, and responses would be untyped.
-*Think of it as:* the standard complaint form and the standard receipt.
-
-**What is the password rule?**
-`validate_password_strength` (min 8 chars, at least one letter and one digit) applied to `SignupRequest`, `ResetPasswordRequest.new_password`, and `ChangePasswordRequest.new_password`.
-*Why do we need it?* Same rule server-side and in the contract, so the frontend can mirror it.
-*What breaks without it?* Weak or inconsistent passwords would pass validation.
-*Think of it as:* a minimum bar on the door to the club.
-
-**What is `RepoCreate` doing?**
-It takes only `url`, validates it is a public `github.com/owner/name` URL (accepting missing scheme, `www.`, trailing slash, `.git`), normalizes it to `https://github.com/owner/name`, and exposes `owner`/`name` as parsed properties.
-*Why do we need it?* The client sends a link; the server derives owner/name and rejects non-GitHub links.
-*What breaks without it?* Any string could be stored as a repo and owner/name parsing would be duplicated.
-*Think of it as:* a form that only accepts library addresses and automatically fills in the branch and shelf.
-
-**What are `RepoOut` / `RepoListOut`?**
-`RepoOut` is the wire shape of a repo (`id`, `url`, `owner`, `name`, `status`, `created_at`, `from_attributes=True`); `RepoListOut` wraps a list as `{"repos": [...]}`.
-*Why do we need it?* It hides `user_id` and lets list and detail responses stay consistent objects.
-*What breaks without it?* Internal columns leak and lists have no envelope to grow into.
-*Think of it as:* the display card for a repo, and a folder that holds the cards.
-
 **What is `security`?**
-The security helpers: `passwords.py` (`hash_password`, `verify_password` via argon2), `tokens.py` (`create_access_token`, `create_refresh_token`, `decode_token` via PyJWT), and `email_tokens.py` (`generate_email_token`, `hash_token`, `expires_at`, `is_expired`, `is_used`), re-exported from `__init__.py`.
-*Why do we need it?* Auth endpoints need safe password hashing, short-lived access/refresh JWTs, and single-use emailed tokens — all in one tested place rather than inline in routes.
-*What breaks without it?* Auth logic would be duplicated and error-prone, and tokens/passwords could be handled unsafely.
-*Think of it as:* the vault where keys are made, checked and revoked.
-
-**What is `hash_password` / `verify_password`?**
-`hash_password` returns an argon2 encoded hash (never the plain password); `verify_password` re-hashes and compares, returning `False` on mismatch or a malformed hash instead of raising.
-*Why do we need it?* Passwords are never stored or logged in plain text.
-*What breaks without it?* Passwords would be stored insecurely or verification would throw on bad input.
-*Think of it as:* a one-way stamp you can check but never read back.
-
-**What is `create_access_token` / `create_refresh_token` / `decode_token`?**
-JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a short `exp`; refresh tokens carry `type="refresh"` and a longer `exp`. `decode_token(token, expected_type)` verifies the signature and expiry and enforces the type, raising `TokenError` otherwise.
-*Why do we need it?* An access token must not be usable as a refresh token (or vice versa); type checking prevents that.
-*What breaks without it?* A stolen/refreshed token could be replayed in the wrong role.
-*Think of it as:* two differently-colored wristbands — valid only for their own door.
-
-**What are the email-token helpers?**
-`generate_email_token()` returns `(raw_token, token_hash)` using `secrets.token_urlsafe`; only `token_hash` (SHA-256 hex) is stored in `email_tokens`. `expires_at(type)` gives the lifetime (verify: `VERIFY_TOKEN_EXPIRE_HOURS`, reset: `RESET_TOKEN_EXPIRE_MINUTES`); `is_expired`/`is_used` check the stored timestamps.
-*Why do we need it?* Verification and reset links must be single-use and time-limited, and the DB must never hold the raw link token.
-*What breaks without it?* Links would be long-lived/reusable, and a DB leak would expose working links.
-*Think of it as:* a numbered claim ticket — the stub is checked against the stored copy and expires.
-
-**What are `TokenType` and `TokenError`?**
-`TokenType` is the `access`/`refresh` enum embedded in each JWT; `TokenError` is the single exception `decode_token` raises for expired, tampered, wrong-secret, or wrong-type tokens.
-*Why do we need it?* Callers get one predictable error type from `decode_token`.
-*What breaks without it?* Every caller would have to catch several PyJWT exception classes.
-*Think of it as:* one error siren for all bad-token cases.
+Reserved for password hashing and JWT helpers.
+*Why do we need it?* `requirements.txt` already includes `argon2-cffi` and `PyJWT` for this.
+*What breaks without it?* Auth endpoints would have no safe hashing/token logic.
+*Think of it as:* the vault where keys are made and checked.
 
 ---
 
@@ -653,7 +514,7 @@ The planned home for one-off helper scripts.
 
 ## The Full Flow
 
-Two things actually run end to end right now: applying the database schema and serving a minimal HTTP API. First, here is exactly what happens when you run `alembic upgrade head` from `backend/` with the venv active:
+Nothing in this repo serves HTTP yet, so the only real end-to-end run is applying the database schema. Here is exactly what happens when you run `alembic upgrade head` from `backend/` with the venv active:
 
 1. **Entry (Layer 4).** The `alembic` CLI reads `backend/alembic.ini`, sees `script_location = %(here)s/alembic`, and loads `backend/alembic/env.py`.
 2. **Wiring (Layer 4 -> 1/2/3).** `env.py` inserts `backend/` into `sys.path`, then imports `get_settings` (Layer 1), `Base` (Layer 2) and `app.models` (Layer 3). Importing `app.models` runs `models/__init__.py`, which imports `User`, `EmailToken`, `EmailTokenType`, and `Repo`, registering all three tables on `Base.metadata`.
@@ -683,81 +544,7 @@ alembic.ini ────────► alembic/env.py
               backend/repotrackr.db  (3 tables + alembic_version)
 ```
 
-### HTTP request flow (app factory)
-
-When uvicorn imports `app.main:app`, the module builds the app, mounts the auth and repos routers, and serves requests:
-
-1. **Startup (Layer 7).** `uvicorn app.main:app` imports `backend/app/main.py`, which calls `create_app()` and assigns `app = create_app()`.
-2. **Config (Layer 1).** `create_app()` calls `get_settings()`, which reads `backend/.env` into the cached `Settings`.
-3. **Middleware + handlers (Layer 7).** It builds the `FastAPI` object, sets `app.state.limiter`, adds `CORSMiddleware` using `settings.CORS_ORIGINS`, registers the exception handlers (including the 429 rate-limit handler), and calls `app.include_router(...)` for the auth, repos, indexing, plan, reader, context and agent routers to mount `features/*/router.py` and `agent/router.py`. `GET /evals` is declared directly on the app.
-4. **Request (`GET /health`).** The route returns `{"status": "ok"}`.
-5. **Errors.** A validation error returns 422, an HTTP error (e.g. unknown path -> 404) returns its own status code, a rate-limit breach returns 429, and any unhandled error returns 500 — all in the same `{"error": {"code", "message", ...}}` shape.
-
-```
-Browser ──GET /health──► uvicorn ──► app/main.py:app
-                                      │ CORS + exception handlers + limiter
-                                      ▼
-                                    200 {"status":"ok"}
-```
-
-### Auth request flow (signup -> verify -> login -> reset)
-
-The auth feature ties Layers 1–4 and 7 together:
-
-1. **Signup (Layer 7).** `POST /auth/signup` validates the body (`SignupRequest`, 422 on a weak password), rejects an existing email (409), hashes the password (`security.hash_password`), inserts an unverified `User` (Layers 2–3, `get_db()`), creates a `VERIFY` `EmailToken` storing only `security.hash_token(raw)` with `security.expires_at("verify")`, then calls `core/email.send_verification_email(email, raw)`. With `SMTP_HOST` set it sends via SMTP; otherwise it logs the link to the console. This endpoint (and forgot-password/resend/login) passes through the `@limiter.limit` check first (429 when exceeded).
-2. **Verify (Layer 7).** `POST /auth/verify-email` hashes the submitted token, looks up the matching `VERIFY` `EmailToken`, and rejects it with 400 when missing, used (`is_used`) or expired (`is_expired`). On success it stamps `used_at` and sets the user's `is_verified = True`.
-3. **Login (Layer 7).** `POST /auth/login` loads the user by normalized email, checks the password with `security.verify_password` (401 on mismatch), returns 403 while unverified, and otherwise returns `TokenResponse` with `create_access_token(user.id)` and `create_refresh_token(user.id)`.
-4. **Refresh (Layer 7).** `POST /auth/refresh` decodes the submitted token as a refresh token (an access token fails), confirms the user still exists and is verified, and returns a fresh pair.
-5. **Me / protected routes (Layer 7).** `GET /auth/me` (and `logout`, `change-password`, `DELETE /account`) depend on `features/auth/dependencies.get_current_user`, which decodes the Bearer access token and loads the user.
-6. **Forgot / reset (Layer 7).** `POST /auth/forgot-password` always returns the same 200 message; for an existing user it creates a single-use `RESET` token and schedules `core/email.send_reset_email` as a background task. `POST /auth/reset-password` validates the token (valid/unexpired/unused/type reset), applies the password rule, sets the new hash and stamps `used_at`.
-
-```
-Browser ──POST /auth/signup──► app/main.py:app ──► features/auth/router.py
-   201 {message}                                   │ limiter check -> hash pw, save User (get_db)
-                                                   │ store EmailToken(hash, exp)
-                                                   ▼
-                                     core/email.send_verification_email
-                                        (SMTP, else console)
-Browser ──POST /auth/verify-email──► router ──► mark token used + user verified
-Browser ──POST /auth/login───────► router ──► 200 {access_token, refresh_token}
-Browser ──POST /auth/refresh─────► router ──► 200 {access_token, refresh_token}
-Browser ──POST /auth/forgot-password─► router ──► 200 {message} (+ background reset email)
-Browser ──POST /auth/reset-password──► router ──► 200 {message} (token used, pw changed)
-Browser ──GET /auth/me (Bearer)──► router ──► dependencies.get_current_user ──► 200 UserOut
-```
-
-### Repos request flow (add -> list -> get -> delete)
-
-The repo feature reuses the auth `get_current_user` dependency and the `repos` table (Layers 2–3) and never touches GitHub:
-
-1. **Add (Layer 7).** `POST /repos` authenticates the Bearer token (`get_current_user`), validates the body as `RepoCreate` (`parse_github_url` rejects anything that is not `github.com/owner/name` with 422), lowercases `owner`/`name`/`url`, and rejects a duplicate for that user with 409. Otherwise it inserts a `Repo(user_id, url, owner, name, status="added")`.
-2. **List (Layer 7).** `GET /repos` returns the current user's rows newest first as `RepoListOut({"repos": [...]})`.
-3. **Get / delete (Layer 7).** `GET /repos/{repo_id}` and `DELETE /repos/{repo_id}` look the row up by `id` **and** `user_id`; a missing row or another user's row returns the same 404. Delete returns `{"message": "Repo deleted."}`.
-
-```
-Browser ──POST /repos (Bearer)──► app/main.py:app ──► features/repos/router.py
-   201 RepoOut                     │ get_current_user -> parse_github_url
-                                   │ lowercase -> duplicate? 409
-                                   ▼
-                        insert Repo(status="added") via get_db()
-Browser ──GET /repos (Bearer)────► router ──► 200 RepoListOut (only my rows, newest first)
-Browser ──GET /repos/{id}────────► router ──► 200 RepoOut | 404 (mine only)
-Browser ──DELETE /repos/{id}─────► router ──► 200 {message} | 404 (mine only)
-```
-
-### Stub request flow (Parts 2–4)
-
-Every Part 2–4 endpoint is registered but not implemented, so the frontend can wire it now and get realistic behavior:
-
-1. **Repo-scoped stubs (Layer 7).** `POST /repos/{repo_id}/index`, `GET .../index/status`, `GET .../index/summary`, `POST`/`GET /repos/{repo_id}/plan`, `GET /repos/{repo_id}/reader`, `POST /repos/{repo_id}/context`, `POST /repos/{repo_id}/query`, and `GET /repos/{repo_id}/agent/trace` each depend on `features/repos/dependencies.get_owned_repo` (so a missing token is 401 and a foreign/missing repo is the same 404) and then return `501 {"status": "not_implemented"}`.
-2. **Evals stub (Layer 7).** `GET /evals` is public (no auth, no repo) and also returns `501 {"status": "not_implemented"}`.
-
-```
-Browser ──POST /repos/{id}/index (Bearer)──► app/main.py:app ──► features/indexing/router.py
-                                                │ get_owned_repo: 401 / 404 / else
-                                                ▼
-                                     501 {"status": "not_implemented"}
-```
+If/when the API is built, the flow will extend upward: HTTP request -> `app/main.py` -> a `features/*` router -> `security`/`schemas` -> `pipeline`/`analysis`/`ai` -> `get_db()`/`Base` -> database.
 
 ## Current Status
 
@@ -766,25 +553,18 @@ Working now (built and previously verified, see `docs/changes.md`):
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and the first migration creating `users`, `email_tokens`, `repos`.
-- HTTP API app factory (`app/main.py`): `create_app()`, CORS from `CORS_ORIGINS`, the slowapi limiter + 429 handler, global JSON error handlers, `GET /health`, and the `GET /evals` stub; runnable via `uvicorn app.main:app`.
-- Auth feature (`app/features/auth/router.py`, `app/features/auth/dependencies.py`): `POST /auth/signup`, `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`, and `GET /auth/me`, mounted in `main.py`.
-- Rate limiting (`app/core/ratelimit.py`, slowapi): per-IP limits on signup, login, forgot-password and resend-verification, configurable via `RATE_LIMIT_*`, returning 429 `http_error`.
-- Repo-records feature (`app/features/repos/router.py`, `dependencies.py`): `POST /repos`, `GET /repos`, `GET /repos/{repo_id}`, and `DELETE /repos/{repo_id}`, all auth-required and scoped to the current user; new repos get `status="added"`, duplicates per user (case-insensitive) return 409, and another user's or a missing repo returns the same 404.
-- Part 2–4 stubs (`app/features/{indexing,plan,reader,context}/router.py`, `app/agent/router.py`, `GET /evals`): all 10 documented not-yet-implemented endpoints are registered. Repo-scoped ones verify ownership via `get_owned_repo` (401 / 404) and then return `501 {"status": "not_implemented"}`; `/evals` is public.
-- Email service (`app/core/email.py`): SMTP sending via `SMTP_*`/`EMAIL_FROM` with a console fallback when `SMTP_HOST` is unset, plus verification/reset link and email helpers.
-- Request/response schemas (`app/schemas/{common,auth,repo,stub}.py`) and the documented contract (`docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/postman_collection.json`).
-- Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing, JWT access/refresh with type-checked `decode_token`, and verify/reset email-token helpers.
-- `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map and docs links.
-- Tests (`backend/tests/test_security.py`, `test_auth.py`, `test_repos.py`, `test_stubs.py`, `conftest.py`): 103 passing.
 
-Not implemented yet (registered as `501` stubs, built in Parts 2–4):
+Not implemented yet:
+- HTTP API / FastAPI app factory (`app/main.py` is empty — no `app` object).
+- Request/response schemas (`app/schemas`), security helpers (`app/security`).
+- All feature routers (`app/features/*`: auth, repos, plan, indexing, context, reader).
 - Deterministic pipeline and analysis (`app/pipeline/*`, `app/analysis/*`), background tasks (`app/tasks`).
-- AI layer (`app/ai/*`) and the agent layer (`app/agent` router is a stub only).
+- AI layer (`app/ai/*`, `app/agent`).
 - Frontend (`frontend/` — `.gitkeep` only).
 - Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile).
 - Evals (`evals/*` — `.gitkeep` only) and helper scripts (`scripts/` — `.gitkeep` only).
-
-Part 1 status: **the backend is complete** — auth, repos, all Part 2–4 stubs, the error contract, tests, README, and the OpenAPI/Postman docs all exist and pass. The only Part 1 "Done when" item not yet true in this repository is opening the **Repo Detail page**, because the frontend pages are a separate team deliverable (`frontend/` is empty). Part 1 is therefore backend-complete, not whole-product-complete.
+- Tests (`backend/tests` — empty package).
+- `README.md` (empty).
 
 ## Running It Locally
 
@@ -804,7 +584,7 @@ Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
 - Required: `SECRET_KEY` (no default). Generate one with:
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`
-- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `VERIFY_TOKEN_EXPIRE_HOURS`, `RESET_TOKEN_EXPIRE_MINUTES`, `RATE_LIMIT_LOGIN`, `RATE_LIMIT_SIGNUP`, `RATE_LIMIT_FORGOT_PASSWORD`, `RATE_LIMIT_RESEND_VERIFICATION`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`.
+- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`.
 
 Create/verify the database (from `backend/`):
 ```bash
@@ -818,36 +598,20 @@ How to verify it works:
 - `alembic check` should say there are no new upgrade operations.
 - Sanity-check config: `python -c "from app.core.config import get_settings; print(get_settings().APP_NAME)"`.
 
-Run the API (from `backend/`, venv active):
-```bash
-uvicorn app.main:app --reload        # serves http://127.0.0.1:8000
-curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
-```
-Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout`, `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2–4 routes (indexing, plan, reader, context, query, agent/trace, evals) are registered but return `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. To see verification/reset links locally, leave `SMTP_HOST` empty in `.env`: the messages are logged to the server console with their `http://localhost:3000/...?token=...` links.
-
-Run the tests (from `backend/`, venv active):
-```bash
-python -m pytest tests/ -q             # all tests (security + auth + repos + stubs)
-python -m pytest tests/test_security.py -q
-python -m pytest tests/test_auth.py -q
-python -m pytest tests/test_repos.py -q
-python -m pytest tests/test_stubs.py -q
-```
+The web server is **not runnable yet**: `app/main.py` is empty, so there is no `app` object for `uvicorn app.main:app` to import. Don't expect an HTTP endpoint to answer.
 
 ## Where You Can Help
 
-- **Layer 7, `app/main.py`:** the app factory exists and now includes all routers (auth, repos, and the Part 2–4 stubs) — replace stub routers with real ones and extend middleware as features are built.
-- **Layer 7, `app/security/`:** helpers exist and are tested — extend them (e.g. token rehash checks) as auth needs grow.
-- **Layer 7, `app/schemas/`:** schemas for Part 1 exist (plus `stub.py`) — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`/`docs/openapi.json`/`docs/postman_collection.json`) when endpoints change.
-- **Layer 7, `app/features/auth/`:** the full Part 1 auth surface (signup/verify/resend/login/refresh/logout/forgot/reset/change/delete/me) plus rate limiting is built; `get_current_user` is reused by the repos feature and every repo-scoped stub.
-- **Layer 7, `app/core/ratelimit.py`:** limits exist for the abuse-prone auth endpoints — add them to other sensitive endpoints and consider a shared storage (Redis) for multi-process deploys.
-- **Layer 7, `app/features/repos/`:** repo CRUD plus `get_owned_repo` are built; Part 2 flips `status` through the pipeline instead of leaving it at `"added"`.
-- **Layer 7, stub routers:** `app/features/{indexing,plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 2–4 (they already enforce ownership).
+- **Layer 7, `app/main.py`:** build the FastAPI app factory — instantiate `FastAPI`, add CORS using `Settings.CORS_ORIGINS`/`FRONTEND_URL`, and include routers. This unblocks everything else.
+- **Layer 7, `app/security/`:** implement password hashing with `argon2-cffi` and JWT creation/validation with `PyJWT`, using `SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`.
+- **Layer 7, `app/schemas/`:** write Pydantic schemas for users, tokens, and repos so ORM models don't leak onto the wire.
+- **Layer 7, `app/features/auth/`:** wire the existing `User` and `EmailToken` models into signup/login/verify/reset endpoints, using `SMTP_*`/`EMAIL_FROM` for sending.
+- **Layer 7, `app/features/repos/`:** add "add repo" and "list my repos" endpoints that write `Repo` rows (respect the `uq_user_repo_url` constraint) and use `get_db()`.
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
 - **Layer 5, `app/pipeline/clone` + `cache`:** start the cloning/caching step that turns a `Repo` row into local files.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
 - **Layer 9:** fill `docker/docker-compose.yml` and add a Dockerfile; stand up the `evals/` harnesses.
-- **Tests:** `test_security.py`, `test_auth.py`, `test_repos.py`, and `test_stubs.py` exist — extend them (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, real pipeline endpoints).
+- **Tests:** add the first pytest cases under `backend/tests` (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down).
 
 ## How To Contribute
 

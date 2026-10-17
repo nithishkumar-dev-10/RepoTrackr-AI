@@ -71,6 +71,7 @@ class RepoOut(BaseModel):
     owner: str
     name: str
     status: str
+    commit_sha: str | None = None
     created_at: datetime
 
 

@@ -65,3 +65,4 @@ tmp/
 # Cloned repos and index cache created in Parts 2+
 data/clones/
 data/cache/
+backend/data/

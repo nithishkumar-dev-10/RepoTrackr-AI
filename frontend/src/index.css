@@ -1,0 +1,136 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import './styles/glow.css';
+
+/*
+  RepoTrackr AI theme.
+  Light app shell, dark 3D canvas. Tokens are declared once here and mapped
+  into Tailwind utilities via @theme inline so classes like `bg-surface`,
+  `text-muted-foreground`, `bg-status-done` exist. The glow system (tokens and
+  utilities) lives in ./styles/glow.css.
+*/
+
+:root {
+  --radius: 0.75rem;
+
+  /* Core surfaces */
+  --background: #f6f7fb;
+  --surface: #ffffff;
+  --foreground: #0b1020;
+  --muted: #f6f7fb;
+  --muted-foreground: #5b6478;
+  --border: #e4e7ef;
+  --input: #e4e7ef;
+  --ring: #3b5bff;
+
+  /* Dark canvas / hero / primary */
+  --canvas: #0b1020;
+  --primary: #0b1020;
+  --primary-foreground: #ffffff;
+
+  /* Brand accent */
+  --brand: #3b5bff;
+  --brand-foreground: #ffffff;
+  --accent: #e8ecff;
+  --accent-foreground: #0b1020;
+
+  --secondary: #e8ecff;
+  --secondary-foreground: #0b1020;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Plan / verification statuses */
+  --status-done: #16a34a;
+  --status-partial: #f59e0b;
+  --status-missing: #ef4444;
+  --status-unknown: #94a3b8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-canvas: var(--canvas);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-status-done: var(--status-done);
+  --color-status-partial: var(--status-partial);
+  --color-status-missing: var(--status-missing);
+  --color-status-unknown: var(--status-unknown);
+
+  --font-sans:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:
+    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    box-shadow: 0 0 18px -4px var(--glow-accent-strong);
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  /* Respect reduced-motion for CSS-driven animation/transition too. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
