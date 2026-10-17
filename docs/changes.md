@@ -366,3 +366,29 @@ Every step appends an entry here. Never delete old entries.
   - `safe_clone` is not yet wired to the indexing endpoint or a background task, so the SHA is not yet persisted to a `Repo` row by the app (the column and migration are ready).
   - The pre-clone GitHub size probe calls `api.github.com` best-effort; if it is unreachable the clone still proceeds and is checked after cloning instead.
   - `data/clones/` is gitignored and can be safely deleted to reset the sandbox.
+
+---
+
+## Pipeline PHASE 1b - Clone cleanup / retention
+
+- **Date:** 2026-10-17
+- **Files created:**
+  - `backend/app/pipeline/clone/cleanup.py` - `remove_clone(path, root)`, `configured_clone_root()`, `clone_workspace(url, config)`, `sweep_stale_clones(max_age_seconds, root)`.
+  - `backend/tests/pipeline/test_cleanup.py` (16 tests).
+- **Files modified:**
+  - `backend/app/pipeline/clone/clone.py` - failure paths now delete the partial folder through `remove_clone` (via a best-effort `_discard` helper); `git_not_found` also cleans up. Public behavior unchanged.
+  - `backend/app/pipeline/clone/__init__.py` - re-exports the cleanup API.
+  - `backend/app/core/config.py` - added `CLONE_STALE_MAX_AGE_SECONDS` (default 3600).
+  - `backend/.env.example` - documented `CLONE_STALE_MAX_AGE_SECONDS`.
+  - `backend/app/main.py` - FastAPI `lifespan` runs `sweep_stale_clones` once on startup, wrapped in `try/except` so a sweep error never blocks startup.
+  - `docs/project_summary.md` - tree, Layer 5 (`pipeline/clone` cleanup study note), Current Status, help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Clones are temporary scratch space: only derived data and the commit SHA are kept, the folder is deleted as soon as it is no longer needed. `clone_workspace()` is a context manager that always removes the folder in `finally` (success, exception, timeout, failed clone). `remove_clone()` only deletes paths that resolve inside the clone root (refuses the root itself, outside paths and `..` tricks), unlinks symlinks instead of following them, and makes read-only git objects writable so deletion succeeds; a missing folder returns `False`. `sweep_stale_clones()` deletes direct child folders older than the max age (mtime), logs and continues past a single failure, and never touches anything outside the root.
+- **New commands / env variables / endpoints / migrations:**
+  - Env var: `CLONE_STALE_MAX_AGE_SECONDS` (default 3600).
+  - Test command: `python -m pytest tests/pipeline/test_cleanup.py -q` (16 passed); full suite `python -m pytest -q` (148 passed = 103 previous + 29 clone + 16 cleanup).
+  - No new Python dependencies (stdlib only).
+  - No new HTTP endpoint or migration.
+- **Known issues / TODOs:**
+  - `safe_clone` is still not wired to any endpoint or task, so `clone_workspace` is not used by the app yet — **TODO:** wrap the pipeline in `clone_workspace` when it is built.
+  - The startup sweep only sees the configured `CLONE_ROOT`; other roots are swept by passing `root=` explicitly.
