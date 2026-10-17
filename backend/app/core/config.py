@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     EMAIL_FROM: str = ""
 
+    # --- Clone sandbox (Part 2 pipeline) ---
+    CLONE_ROOT: str = "data/clones"
+    CLONE_MAX_SIZE_MB: int = 200
+    CLONE_TIMEOUT_SECONDS: int = 120
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _parse_cors_origins(cls, value: object) -> list[str]:
