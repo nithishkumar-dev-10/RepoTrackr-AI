@@ -46,7 +46,13 @@ RepoTrackr-AI/
 │   │   │   └── reader/__init__.py   # Empty — reader feature
 │   │   ├── pipeline/
 │   │   │   ├── __init__.py          # Empty package marker
-│   │   │   ├── clone/__init__.py    # Empty — clone repos
+│   │   │   ├── clone/              # Safe clone sandbox + scratch cleanup
+│   │   │   │   ├── __init__.py      # Public clone API (__all__)
+│   │   │   │   ├── clone.py         # safe_clone: validate, shallow clone, SHA, filter
+│   │   │   │   ├── cleanup.py       # remove_clone, clone_workspace, sweep_stale_clones
+│   │   │   │   ├── filters.py       # skip dirs + secret-file stripping
+│   │   │   │   ├── models.py        # CloneConfig, CloneResult
+│   │   │   │   └── errors.py        # CloneError + machine-readable codes
 │   │   │   ├── chunking/__init__.py # Empty — split code into chunks
 │   │   │   ├── indexer/__init__.py  # Empty — build deterministic index
 │   │   │   ├── cache/__init__.py    # Empty — clone/index cache
@@ -284,19 +290,25 @@ It drops `repos`, then `email_tokens`, then `users` (and their indexes).
 
 **What it is:** The folder skeleton reserved for the deterministic half of the product — cloning repos, chunking, indexing, caching, building a code graph, and the analysis passes (reader order, retrieval, plan checks, context packing).
 **Why it exists:** The design rule is that deterministic analysis decides what is true; the AI only reasons over this evidence. Keeping it separate from `ai/` enforces that.
-**Files in it:** `backend/app/pipeline/{clone,chunking,indexer,cache,graph}/__init__.py`, `backend/app/analysis/{reader_order,retrieval,plan_checks,packer}/__init__.py`, and `backend/app/tasks/__init__.py`.
+**Files in it:** `backend/app/pipeline/clone/{__init__,clone,cleanup,filters,models,errors}.py`; the rest are empty markers — `backend/app/pipeline/{chunking,indexer,cache,graph}/__init__.py`, `backend/app/analysis/{reader_order,retrieval,plan_checks,packer}/__init__.py`, and `backend/app/tasks/__init__.py`.
 **Depends on:** Layer 1 (settings), Layer 2 (sessions), Layer 3 (models, e.g. `Repo`).
 **Used by:** the future AI Layer (as evidence) and the future HTTP API (to trigger and report status).
 
-*Not implemented yet. Every file listed is an empty `__init__.py` package marker.*
+*`pipeline/clone` is implemented (see its study note below). Every other file listed is still an empty `__init__.py` package marker.*
 
 #### Study Notes for this layer
 
 **What is `pipeline/clone`?**
-Reserved for cloning a repo's code to local disk.
-*Why do we need it?* Everything downstream needs a local copy to read.
+Clones a repo into a sandboxed scratch folder and reads its commit SHA. `safe_clone()` (`clone.py`) validates the URL, rejects oversized repos (best-effort GitHub size probe before cloning, exact size after), shallow-clones with hooks/templates disabled and no shell, reads the HEAD SHA, then strips `.git`, ignored dirs and secret files. `CloneConfig` (`models.py`) carries the root, size limit and timeout; failures raise `CloneError` with a code (`errors.py`).
+*Why do we need it?* Everything downstream needs a local copy to read, plus the exact commit it read.
 *What breaks without it?* Nothing to index or analyze.
 *Think of it as:* the delivery truck bringing the package to the warehouse.
+
+**What is `pipeline/clone` cleanup?**
+Clones are temporary scratch space: the derived data and the commit SHA are kept, the folder is not. `clone_workspace()` (`cleanup.py`) is a context manager that clones and always deletes the folder in `finally` — on success, exception, timeout, or failed clone. `remove_clone(path, root)` deletes a folder only if it resolves inside the clone root (it refuses the root itself, outside paths and `..` tricks), unlinks symlinks instead of following them, and makes read-only git objects writable so deletion succeeds; a missing folder returns `False`. `sweep_stale_clones(max_age_seconds)` deletes direct child folders of the root older than `max_age_seconds` (mtime), logging and continuing past any single failure. The app runs a sweep once on startup (FastAPI lifespan, `main.py`), wrapped so a sweep error never blocks startup; the retention window comes from `CLONE_STALE_MAX_AGE_SECONDS` (default 3600). Failed, timed-out and oversized clones already remove their own partial folder.
+*Why do we need it?* Clones are scratch, not durable state — they must not pile up on disk.
+*What breaks without it?* Disk fills with stale clones and orphaned partial folders.
+*Think of it as:* wiping the prep counter clean after each dish is plated.
 
 **What is `pipeline/chunking`?**
 Reserved for splitting source files into analyzable chunks.
@@ -553,12 +565,13 @@ Working now (built and previously verified, see `docs/changes.md`):
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and the first migration creating `users`, `email_tokens`, `repos`.
+- Clone sandbox (`app/pipeline/clone/`) — `safe_clone` (validate, shallow clone, SHA, filter) plus scratch cleanup (`remove_clone`, `clone_workspace`, `sweep_stale_clones`) and a startup stale sweep (`main.py` lifespan).
 
 Not implemented yet:
 - HTTP API / FastAPI app factory (`app/main.py` is empty — no `app` object).
 - Request/response schemas (`app/schemas`), security helpers (`app/security`).
 - All feature routers (`app/features/*`: auth, repos, plan, indexing, context, reader).
-- Deterministic pipeline and analysis (`app/pipeline/*`, `app/analysis/*`), background tasks (`app/tasks`).
+- Deterministic pipeline and analysis beyond clone (`app/pipeline/{chunking,indexer,cache,graph}`, `app/analysis/*`), background tasks (`app/tasks`).
 - AI layer (`app/ai/*`, `app/agent`).
 - Frontend (`frontend/` — `.gitkeep` only).
 - Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile).
@@ -584,7 +597,7 @@ Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
 - Required: `SECRET_KEY` (no default). Generate one with:
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`
-- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`.
+- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `CLONE_ROOT`, `CLONE_MAX_SIZE_MB`, `CLONE_TIMEOUT_SECONDS`, `CLONE_STALE_MAX_AGE_SECONDS`.
 
 Create/verify the database (from `backend/`):
 ```bash
@@ -608,7 +621,7 @@ The web server is **not runnable yet**: `app/main.py` is empty, so there is no `
 - **Layer 7, `app/features/auth/`:** wire the existing `User` and `EmailToken` models into signup/login/verify/reset endpoints, using `SMTP_*`/`EMAIL_FROM` for sending.
 - **Layer 7, `app/features/repos/`:** add "add repo" and "list my repos" endpoints that write `Repo` rows (respect the `uq_user_repo_url` constraint) and use `get_db()`.
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
-- **Layer 5, `app/pipeline/clone` + `cache`:** start the cloning/caching step that turns a `Repo` row into local files.
+- **Layer 5, `app/pipeline/clone` + `cache`:** wire `safe_clone` into a `Repo` row (persist the SHA). **TODO:** wrap the pipeline in `clone_workspace` when it's built, so each run deletes its scratch folder as soon as it's done.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
 - **Layer 9:** fill `docker/docker-compose.yml` and add a Dockerfile; stand up the `evals/` harnesses.
 - **Tests:** add the first pytest cases under `backend/tests` (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down).
