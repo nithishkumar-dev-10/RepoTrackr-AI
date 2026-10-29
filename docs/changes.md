@@ -366,3 +366,125 @@ Every step appends an entry here. Never delete old entries.
   - `safe_clone` is not yet wired to the indexing endpoint or a background task, so the SHA is not yet persisted to a `Repo` row by the app (the column and migration are ready).
   - The pre-clone GitHub size probe calls `api.github.com` best-effort; if it is unreachable the clone still proceeds and is checked after cloning instead.
   - `data/clones/` is gitignored and can be safely deleted to reset the sandbox.
+
+---
+
+## Step 2 - AST indexer
+
+- **Date:** 2026-10-20
+- **Files created:**
+  - `backend/app/pipeline/indexer/models.py` - `Symbol` (name, kind, file, `line_start`/`line_end`, signature, docstring, `parent`), `ImportRef` (module, names, alias, level), `CallRef`, `FileIndex`, `RepoIndex`, `SymbolKind`.
+  - `backend/app/pipeline/indexer/parser.py` - `parse_source(source, file)` / `parse_file(path)`: walks Python's `ast` and records functions, classes, methods, imports and calls without importing or executing the analyzed code.
+  - `backend/app/pipeline/indexer/repo.py` - `index_repo(folder)`: walks a folder with `IGNORED_DIRS` / `IGNORED_FILE_PREFIXES` / `IGNORED_FILE_SUFFIXES`, skips unparsable files with a logged reason, returns a `RepoIndex`.
+  - `backend/app/pipeline/indexer/detect.py` - `is_test_file` and `find_entry_points` (`__name__ == "__main__"` guards, FastAPI/Flask route decorators, argparse/Click/Typer CLIs).
+  - `backend/app/pipeline/indexer/__main__.py` - CLI entry point printing `kind | name | file:line` rows and a summary.
+  - `backend/app/pipeline/indexer/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_indexer.py` - 24 tests.
+- **Files modified:** none outside the new package (no dependency, env var, endpoint or migration).
+- **What changed and why:** Built the deterministic index the rest of the pipeline reads from. `parse_source` turns source text into `Symbol`/`ImportRef`/`CallRef` records with exact line ranges taken from the AST, so every later claim can cite `file:line`. Classes and methods record their dotted `parent` (`Dog.bark`), signatures are reconstructed with `ast.unparse`, and the first body docstring is kept. Entry-point detection exists because the graph step needs a defensible place to start a reading order. The indexer never imports the target code — it only parses it.
+- **New commands / env variables / endpoints / migrations:**
+  - Command (from `backend/`): `python -m app.pipeline.indexer <folder>`.
+  - Tests: `python -m pytest tests/pipeline/test_indexer.py -q` (24 passed); full suite at this step: 156 passed.
+  - No new dependencies, env vars, HTTP endpoints or migrations.
+- **Known issues / TODOs:**
+  - Python-only: only `.py` files are parsed; other languages are ignored.
+  - Not wired to any HTTP route or background task, and nothing persists a `RepoIndex` yet.
+  - Files that fail to parse are skipped and recorded in `RepoIndex` with a parse error rather than failing the whole run.
+  - Import/call resolution is syntactic; dynamic imports and runtime aliasing are out of scope.
+
+---
+
+## Step 3 - Code graph and reading order
+
+- **Date:** 2026-10-20
+- **Files created:**
+  - `backend/app/pipeline/graph/models.py` - `GraphNode` (module or symbol, `file`), `GraphEdge` (`import` / `call`), `CentralityScore` (in-degree, PageRank, combined `score`), `GraphResult`.
+  - `backend/app/pipeline/graph/builder.py` - `build_graph(repo_index)`: module and symbol nodes, import edges resolved through dotted/relative imports and package `__init__.py`, call edges resolved through import bindings, in-degree + PageRank centrality, entry modules, Mermaid text.
+  - `backend/app/pipeline/graph/reading_order.py` - `reading_order(...)`: breadth-first from entry modules, following imports, ties broken by centrality, cycle-safe.
+  - `backend/app/pipeline/graph/mermaid.py` - `mermaid_diagram(result)`: Mermaid flowchart text for the graph.
+  - `backend/app/pipeline/graph/__main__.py` - CLI entry point printing central modules, reading order and the diagram.
+  - `backend/app/pipeline/graph/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_graph.py` - 16 tests.
+- **Files modified:** `backend/requirements.txt` - added `networkx==3.7`.
+- **What changed and why:** Turned the flat index into a graph so connections and importance become explicit. Modules are nodes (`core/config.py`) and so are symbols (`core/config.py:get_settings`); `import` edges connect modules and `call` edges connect symbols, both resolved statically against the indexed file set. Each module gets a `CentralityScore` that adds its normalized in-degree to its normalized PageRank, and the reading order walks from detected entry points breadth-first so a newcomer starts where execution starts. The Mermaid renderer gives the frontend a diagram without a graphing library.
+- **New commands / env variables / endpoints / migrations:**
+  - Command (from `backend/`): `python -m app.pipeline.graph <folder>`.
+  - Dependency: `networkx` (added to `backend/requirements.txt`).
+  - Tests: `python -m pytest tests/pipeline/test_graph.py -q` (16 passed); full suite at this step: 172 passed.
+  - No env vars, HTTP endpoints or migrations.
+- **Known issues / TODOs:**
+  - Not wired to any HTTP route (the frontend's graph is still demo data); nothing persists a `GraphResult`.
+  - Resolution is static and best-effort: conditional/dynamic imports, `importlib`, and re-exports beyond simple bindings will be missed.
+  - Python-only, because it consumes the indexer's `RepoIndex`.
+  - Reading order reflects imports and centrality, not runtime behaviour.
+
+---
+
+## Step 4 - Chunking with tiktoken and SQLite cache
+
+- **Date:** 2026-10-21
+- **Files created:**
+  - `backend/app/pipeline/chunking/models.py` - `Chunk` (id, name, kind, file, line range, text, `token_count`, `file_hash`, `commit_sha`, `too_large`), `ChunkSet`, `MAX_TOKENS = 2000`.
+  - `backend/app/pipeline/chunking/builder.py` - `build_chunks(folder, commit_sha, db_path)`: one chunk per function/class/method, a `# file:line` header, class chunks with signature + docstring + method names, tiktoken `cl100k_base` counts, per-file sha256, cache reuse.
+  - `backend/app/pipeline/chunking/store.py` - `ChunkStore`: SQLite `chunks` keyed by `(commit_sha, chunk_id)` and `file_cache` keyed by `(file, file_hash)`.
+  - `backend/app/pipeline/chunking/__main__.py` - CLI entry point (`--sha`, `--db`) printing totals, cache counts, timing and the largest chunks.
+  - `backend/app/pipeline/chunking/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_chunking.py` - 11 tests.
+- **Files modified:** `backend/requirements.txt` - added `tiktoken==0.14.0`.
+- **What changed and why:** Produced the retrievable units: symbol-sized chunks with honest size numbers, stored per commit. Each chunk's text starts with `# file.py:line`, so a chunk names its own source; class chunks keep the signature, docstring and method names while method bodies live in their own chunks, so no code is stored twice. Token counts use tiktoken's `cl100k_base`; anything over 2000 tokens is flagged `too_large` but never split, because splitting a function would break its citation. The SQLite store keeps each commit's chunk set separately and a `file_cache` row per `(file, content hash)` so re-runs skip unchanged files instead of re-parsing them.
+- **New commands / env variables / endpoints / migrations:**
+  - Command (from `backend/`): `python -m app.pipeline.chunking <folder> [--sha SHA] [--db PATH]`.
+  - Dependency: `tiktoken` (added to `backend/requirements.txt`); the tokenizer must be downloadable/cached, otherwise the build fails loudly with a clear message.
+  - Storage: `backend/data/chunks.db` by default (`--db` overrides); `backend/data/` is gitignored.
+  - Tests: `python -m pytest tests/pipeline/test_chunking.py -q` (11 passed); full suite at this step: 183 passed.
+  - No env vars, HTTP endpoints or migrations.
+- **Known issues / TODOs:**
+  - Python-only, because it consumes the indexer's `Symbol` records.
+  - Not wired to any HTTP route or background task; no `Repo.status`/`Repo.commit_sha` update.
+  - `too_large` chunks are flagged, not split, so a very long function stays one oversized chunk.
+  - The cache is local SQLite only; changing the chunking strategy makes old `file_cache` rows stale (they are keyed by content hash, not by strategy version).
+
+---
+
+## Step 5 - BM25 retrieval and failure notes
+
+- **Date:** 2026-10-21
+- **Files created:**
+  - `backend/app/pipeline/retrieval/tokenizer.py` - `tokenize(text)`: lowercase word tokens shared by indexing and querying; splits `snake_case`, `camelCase`/`PascalCase`, acronyms, letter/digit boundaries and paths; drops one-character tokens.
+  - `backend/app/pipeline/retrieval/index.py` - `BM25Index` (rank_bm25 `BM25Okapi` over one commit's chunks), `load_index(commit_sha, db_path)`, `default_commit_sha()`, `UnknownCommitError`.
+  - `backend/app/pipeline/retrieval/models.py` - `SearchResult` (chunk id, symbol, kind, file, line range, score, token count).
+  - `backend/app/pipeline/retrieval/queries.py` - batch runner: one query per line, prints the top 5 per query.
+  - `backend/app/pipeline/retrieval/__main__.py` - CLI entry point (`--k`, `--sha`, `--db`) printing the commit and ranked results.
+  - `backend/app/pipeline/retrieval/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_retrieval.py` - 19 tests.
+  - `backend/data/queries.txt` - the 10 test queries (5 exact names, 5 plain-word ideas). `backend/data/` is gitignored, so this file is local-only.
+  - `backend/data/bm25_failure_notes.md` - per-query correct answer, top 3 results, hit/miss and reason, plus the summary and failure patterns. Local-only for the same reason.
+- **Files modified:** `backend/requirements.txt` - added `rank-bm25==0.2.2` and `numpy==2.5.4`.
+- **What changed and why:** Added the deterministic retrieval baseline, with no AI. The index is built over exactly one commit's stored chunks; each chunk's searchable text repeats the symbol name three times and adds the file path, signature, first docstring and body identifiers (keywords removed), so an exact-name query has a fair chance against short schema classes. Query and index both use the same tokenizer, so `verify_token` matches "verify token". Missing DBs, missing tables and unknown commit SHAs raise clear errors instead of crashing. The measured baseline is written down rather than assumed: 7/10 queries hit in the top 3 — exact names 5/5 (ranks 2, 3, 3, 1, 1), plain-word queries 2/5 — with three documented failure patterns (vocabulary mismatch, generic-word capture plus short-chunk bias, usage chunks outranking definitions).
+- **New commands / env variables / endpoints / migrations:**
+  - Commands (from `backend/`): `python -m app.pipeline.retrieval "<query>" [--k N] [--sha SHA] [--db PATH]` and `python -m app.pipeline.retrieval.queries <file>`.
+  - Dependencies: `rank-bm25`, `numpy` (added to `backend/requirements.txt`).
+  - Tests: `python -m pytest tests/pipeline/test_retrieval.py -q` (19 passed); full suite: **202 passed**.
+  - No env vars, HTTP endpoints or migrations; `POST /repos/{repo_id}/query` is still a `501` stub.
+- **Known issues / TODOs:**
+  - Retrieval is not wired to any HTTP endpoint or to the frontend; it is CLI/library only.
+  - No embeddings or reranking (that is the fix the failure notes point to), so plain-word queries with vocabulary mismatch still miss.
+  - Results depend on running the chunking step first; a missing or empty DB produces a clear error.
+  - `backend/data/queries.txt` and `backend/data/bm25_failure_notes.md` are gitignored, so the baseline and notes are not committed with the code.
+  - The failure notes end with "Drafted by the agent, reviewed by me: PENDING" — human review of the notes is still outstanding.
+
+---
+
+## Clone security fix - URL allow-list narrowed to public GitHub HTTPS
+
+- **Date:** 2026-10-21
+- **Files created / modified:**
+  - `backend/app/pipeline/clone/clone.py` - `ALLOWED_SCHEMES` is now `{"https"}`; new `_validate_github_url` (https scheme, host exactly `github.com`, `/owner/repo` path, no credentials/ports/query/fragment, no leading `-`, no whitespace or control characters); the clone body moved into `_clone_repository`; `_probe_github_size_kb` now probes only `https` + `github.com`.
+  - `backend/tests/pipeline/test_clone.py` - the offline `file://` tests now go through the test-only `clone_local_fixture` helper; added allow-list tests (accepted GitHub URLs, rejected schemes/hosts/credentials/ports/query/fragment/dash/whitespace, and "git never runs for a rejected URL").
+  - `docs/project_summary.md` - the clone URL allow-list known issue is marked fixed.
+- **What changed and why:** `safe_clone` is the entry point the app will call once cloning is wired to the API, so it must not let a logged-in user point it at a local path or an internal host (SSRF). It now accepts only `https://github.com/<owner>/<repo>` (`.git` optional) and rejects everything else with `CloneError("invalid_url")`: the `file`, `ssh`, `git` and `http` schemes and every other scheme, any host that is not exactly `github.com` (including `github.com.evil.com`, `evilgithub.com`, `www.github.com` and `github.com.`), embedded `user:pass@` credentials, explicit ports, query strings, fragments, URLs starting with `-` (git option injection) and URLs holding whitespace or control characters. Local `file://` clones stay possible for the offline tests through `clone_local_fixture`, a helper that lives in the test file and only accepts local `file://` paths, so no production code path can clone a local path.
+- **New commands / env variables / endpoints / migrations:** none. Tests: `python -m pytest tests/pipeline/test_clone.py -q` (74 passed); full suite: **247 passed**.
+- **Known issues / TODOs:**
+  - `safe_clone` is still not wired to any endpoint; when it is, the route must hand the user-supplied URL to `safe_clone` unchanged, so the allow-list stays the only gate.
+  - The clone still trusts the remote repository; the pre-flight size probe and the post-clone size check are the only size limits.
+  - `docs/project_summary.md` still shows the old test counts (202 passing, `test_clone.py` 29) in its status sections; they are now 247 and 74.
