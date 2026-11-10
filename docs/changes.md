@@ -392,3 +392,5 @@ Every step appends an entry here. Never delete old entries.
 - **Known issues / TODOs:**
   - `safe_clone` is still not wired to any endpoint or task, so `clone_workspace` is not used by the app yet — **TODO:** wrap the pipeline in `clone_workspace` when it is built.
   - The startup sweep only sees the configured `CLONE_ROOT`; other roots are swept by passing `root=` explicitly.
+
+

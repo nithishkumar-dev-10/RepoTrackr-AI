@@ -1,11 +1,13 @@
 import subprocess
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
 from app.pipeline.clone import (
     CloneConfig,
     CloneError,
+    CloneResult,
     clean_repo,
     is_secret_file,
     is_skipped_dir,
@@ -22,8 +24,23 @@ def _config(root: Path, **overrides) -> CloneConfig:
     return CloneConfig(**params)
 
 
-def test_safe_clone_returns_path_and_full_sha(repo_url: str, tmp_path: Path) -> None:
-    result = safe_clone(repo_url, _config(tmp_path / "clones"))
+def clone_local_fixture(url: str, config: CloneConfig) -> CloneResult:
+    """Clone a local ``file://`` fixture. Test-only.
+
+    The application uses ``safe_clone``, which accepts public GitHub HTTPS
+    URLs only. The offline tests need a real repository on disk, so they use
+    this helper instead: it skips the GitHub allow-list but still refuses
+    anything that is not a local ``file://`` path. No production code path
+    can reach it.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "file" or not parsed.path.startswith("/"):
+        raise CloneError("invalid_url", "Test fixtures must be local file:// URLs.")
+    return clone_module._clone_repository(url, config)
+
+
+def test_clone_returns_path_and_full_sha(repo_url: str, tmp_path: Path) -> None:
+    result = clone_local_fixture(repo_url, _config(tmp_path / "clones"))
 
     assert result.path.is_dir()
     assert len(result.commit_sha) == 40
@@ -32,7 +49,7 @@ def test_safe_clone_returns_path_and_full_sha(repo_url: str, tmp_path: Path) -> 
     assert result.size_bytes > 0
 
 
-def test_safe_clone_strips_secrets_and_ignored_dirs(tmp_path: Path) -> None:
+def test_clone_strips_secrets_and_ignored_dirs(tmp_path: Path) -> None:
     source = make_git_repo(
         tmp_path / "source",
         {
@@ -46,7 +63,7 @@ def test_safe_clone_strips_secrets_and_ignored_dirs(tmp_path: Path) -> None:
         },
     )
 
-    result = safe_clone(source.as_uri(), _config(tmp_path / "clones"))
+    result = clone_local_fixture(source.as_uri(), _config(tmp_path / "clones"))
     names = sorted(p.name for p in result.path.iterdir())
 
     assert names == [".env.example", "main.py"]
@@ -71,17 +88,17 @@ def test_clone_records_committed_sha(tmp_path: Path) -> None:
         check=True,
     ).stdout.strip()
 
-    result = safe_clone(source.as_uri(), _config(tmp_path / "clones"))
+    result = clone_local_fixture(source.as_uri(), _config(tmp_path / "clones"))
     assert result.commit_sha == head
 
 
 def test_reclone_overwrites_existing_destination(repo_url: str, tmp_path: Path) -> None:
     root = tmp_path / "clones"
-    first = safe_clone(repo_url, _config(root))
+    first = clone_local_fixture(repo_url, _config(root))
     stale = first.path / "stale.txt"
     stale.write_text("old", encoding="utf-8")
 
-    second = safe_clone(repo_url, _config(root))
+    second = clone_local_fixture(repo_url, _config(root))
 
     assert second.path == first.path
     assert not stale.exists()
@@ -114,7 +131,7 @@ def test_unsupported_scheme_is_rejected(tmp_path: Path) -> None:
 def test_missing_repo_raises_git_failed(tmp_path: Path) -> None:
     missing = (tmp_path / "does-not-exist").as_uri()
     with pytest.raises(CloneError) as exc:
-        safe_clone(missing, _config(tmp_path / "clones"))
+        clone_local_fixture(missing, _config(tmp_path / "clones"))
     assert exc.value.code == "git_failed"
 
 
@@ -125,7 +142,7 @@ def test_post_clone_size_limit_rejects(
     monkeypatch.setattr(clone_module, "_dir_size_bytes", lambda root: 10 * 1024 * 1024)
 
     with pytest.raises(CloneError) as exc:
-        safe_clone(repo_url, config)
+        clone_local_fixture(repo_url, config)
     assert exc.value.code == "size_exceeded"
 
 
@@ -150,7 +167,7 @@ def test_timeout_raises_and_cleans_up(
     root = tmp_path / "clones"
 
     with pytest.raises(CloneError) as exc:
-        safe_clone(repo_url, _config(root, timeout_seconds=1))
+        clone_local_fixture(repo_url, _config(root, timeout_seconds=1))
     assert exc.value.code == "timeout"
 
 
@@ -163,7 +180,7 @@ def test_missing_git_binary_raises_git_not_found(
     monkeypatch.setattr(clone_module.subprocess, "run", _no_git)
 
     with pytest.raises(CloneError) as exc:
-        safe_clone(repo_url, _config(tmp_path / "clones"))
+        clone_local_fixture(repo_url, _config(tmp_path / "clones"))
     assert exc.value.code == "git_not_found"
 
 
@@ -222,3 +239,126 @@ def test_slug_is_stable_and_unique_per_url(tmp_path: Path) -> None:
 
     assert a1 == a2
     assert a1 != b
+
+
+# --- URL allow-list -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/psf/requests",
+        "https://github.com/psf/requests.git",
+    ],
+)
+def test_public_github_url_is_accepted(url: str) -> None:
+    assert clone_module._validate_github_url(url) == url
+
+
+def test_safe_clone_accepts_public_github_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, str] = {}
+
+    def _fake_clone(url: str, config: CloneConfig) -> CloneResult:
+        seen["url"] = url
+        return CloneResult(
+            url=url,
+            path=tmp_path / "cloned",
+            commit_sha="0" * 40,
+            size_bytes=0,
+        )
+
+    monkeypatch.setattr(clone_module, "_clone_repository", _fake_clone)
+
+    result = safe_clone("https://github.com/psf/requests", _config(tmp_path / "clones"))
+
+    assert seen["url"] == "https://github.com/psf/requests"
+    assert result.url == "https://github.com/psf/requests"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Other schemes
+        "file:///etc/passwd",
+        "file:///tmp/source",
+        "ssh://git@github.com/psf/requests.git",
+        "git://github.com/psf/requests.git",
+        "http://github.com/psf/requests",
+        "ftp://github.com/psf/requests",
+        # Local and internal hosts
+        "https://localhost/psf/requests",
+        "https://127.0.0.1/psf/requests",
+        "https://10.0.0.5/psf/requests",
+        "https://192.168.1.10/psf/requests",
+        "https://169.254.169.254/latest/meta-data/",
+        "https://[::1]/psf/requests",
+        # Other hosts
+        "https://gitlab.com/psf/requests",
+        "https://example.com/psf/requests",
+        "https://git.sr.ht/~psf/requests",
+        # Hosts that only look like github.com
+        "https://github.com.evil.com/psf/requests",
+        "https://evilgithub.com/psf/requests",
+        "https://github.com./psf/requests",
+        "https://www.github.com/psf/requests",
+        "https://mygithub.com/psf/requests",
+        # Credentials
+        "https://user:pass@github.com/psf/requests",
+        "https://user@github.com/psf/requests",
+        # Explicit ports
+        "https://github.com:443/psf/requests",
+        "https://github.com:8443/psf/requests",
+        # Query strings and fragments
+        "https://github.com/psf/requests?x=1",
+        "https://github.com/psf/requests#frag",
+        # Git option injection
+        "--upload-pack=evil",
+        "-x",
+        # Whitespace and control characters
+        " https://github.com/psf/requests",
+        "https://github.com/psf/requests ",
+        "https://github.com/psf/re po",
+        "https://github.com/psf/requests\n",
+        "https://github.com/psf/requests\t",
+        "https://github.com/psf/requests\x00",
+        # Wrong path shape
+        "https://github.com/psf",
+        "https://github.com/psf/requests/extra",
+        "https://github.com//requests",
+        "https://github.com/../etc",
+        "https://github.com/psf/..",
+    ],
+)
+def test_rejected_url_raises_invalid_url(url: str, tmp_path: Path) -> None:
+    with pytest.raises(CloneError) as exc:
+        safe_clone(url, _config(tmp_path / "clones"))
+    assert exc.value.code == "invalid_url"
+
+
+def test_rejected_url_never_reaches_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _no_git(*args, **kwargs):
+        raise AssertionError("git must not run for a rejected URL")
+
+    monkeypatch.setattr(clone_module.subprocess, "run", _no_git)
+
+    with pytest.raises(CloneError) as exc:
+        safe_clone("file:///etc/passwd", _config(tmp_path / "clones"))
+    assert exc.value.code == "invalid_url"
+
+
+def test_safe_clone_rejects_local_file_url_even_when_it_exists(tmp_path: Path) -> None:
+    source = make_git_repo(tmp_path / "source")
+
+    with pytest.raises(CloneError) as exc:
+        safe_clone(source.as_uri(), _config(tmp_path / "clones"))
+    assert exc.value.code == "invalid_url"
+
+
+def test_local_fixture_helper_refuses_non_file_urls(tmp_path: Path) -> None:
+    with pytest.raises(CloneError) as exc:
+        clone_local_fixture("https://github.com/psf/requests", _config(tmp_path / "clones"))
+    assert exc.value.code == "invalid_url"
