@@ -2,11 +2,7 @@ import hashlib
 import json
 import logging
 import os
-<<<<<<< HEAD
-import re
-import shutil
-=======
->>>>>>> frontend-redesign
+
 import subprocess
 import urllib.error
 import urllib.request
@@ -25,6 +21,16 @@ GITHUB_API = "https://api.github.com/repos"
 SHA_LENGTH = 40
 # GitHub owner and repo names: letters, digits, dot, dash, underscore.
 GITHUB_NAME_PATTERN = re.compile(r"[A-Za-z0-9_.-]+")
+
+logger = logging.getLogger("app")
+
+
+def _discard(path: Path, root: Path | None = None) -> None:
+    """Best-effort removal of a partial clone; never masks the original error."""
+    try:
+        remove_clone(path, root=root if root is not None else path.parent)
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to clean partial clone %s: %s", path, exc)
 
 logger = logging.getLogger("app")
 
