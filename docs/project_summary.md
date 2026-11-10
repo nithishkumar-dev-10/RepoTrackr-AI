@@ -65,6 +65,7 @@ RepoTrackr-AI/
 │   │   │   └── reader/router.py     # Stub: GET /repos/{id}/reader (501)
 │   │   ├── pipeline/
 │   │   │   ├── __init__.py          # Empty package marker
+<<<<<<< HEAD
 │   │   │   ├── clone/
 │   │   │   │   ├── __init__.py      # Re-exports safe_clone, clean_repo, models, errors
 │   │   │   │   ├── clone.py         # safe_clone: shallow clone, size/timeout limits, slug, SHA
@@ -99,6 +100,19 @@ RepoTrackr-AI/
 │   │   │   │   ├── queries.py       # Batch runner: python -m app.pipeline.retrieval.queries <file>
 │   │   │   │   └── tokenizer.py     # tokenize: lowercase, split snake_case/camelCase/paths
 │   │   │   └── cache/__init__.py    # Empty — clone/index cache (not built)
+=======
+│   │   │   ├── clone/              # Safe clone sandbox + scratch cleanup
+│   │   │   │   ├── __init__.py      # Public clone API (__all__)
+│   │   │   │   ├── clone.py         # safe_clone: validate, shallow clone, SHA, filter
+│   │   │   │   ├── cleanup.py       # remove_clone, clone_workspace, sweep_stale_clones
+│   │   │   │   ├── filters.py       # skip dirs + secret-file stripping
+│   │   │   │   ├── models.py        # CloneConfig, CloneResult
+│   │   │   │   └── errors.py        # CloneError + machine-readable codes
+│   │   │   ├── chunking/__init__.py # Empty — split code into chunks
+│   │   │   ├── indexer/__init__.py  # Empty — build deterministic index
+│   │   │   ├── cache/__init__.py    # Empty — clone/index cache
+│   │   │   └── graph/__init__.py    # Empty — code graph
+>>>>>>> frontend-redesign
 │   │   ├── analysis/
 │   │   │   ├── __init__.py          # Empty package marker
 │   │   │   ├── reader_order/__init__.py  # Empty — file reading order
@@ -383,6 +397,7 @@ It drops `repos`, then `email_tokens`, then `users` (and their indexes).
 
 ### Layer 5: Repository Pipeline & Deterministic Analysis
 
+<<<<<<< HEAD
 **What it is:** The deterministic half of the product: a safe shallow clone, an AST index of Python code, a networkx code graph with centrality and reading order, chunking with token counts and a SQLite file-hash cache, and BM25 retrieval over those chunks. Index, graph, chunk and retrieve each ship a `python -m` CLI; the clone is library-only, and none of them is reachable over HTTP yet. The remaining folders — the clone/index cache, the analysis passes (reader order, retrieval, plan checks, context packing) and the background jobs — are still empty packages.
 **Why it exists:** The design rule is that deterministic analysis decides what is true; the AI only retrieves, reasons over evidence and explains, and every claim cites `file:line`. Keeping this code separate from `ai/` enforces that, and it must keep working when no AI is available.
 **Files in it:** `backend/app/pipeline/clone/{__init__,clone,errors,filters,models}.py`, `backend/app/pipeline/indexer/{__init__,__main__,detect,models,parser,repo}.py`, `backend/app/pipeline/graph/{__init__,__main__,builder,mermaid,models,reading_order}.py`, `backend/app/pipeline/chunking/{__init__,__main__,builder,models,store}.py`, `backend/app/pipeline/retrieval/{__init__,__main__,index,models,queries,tokenizer}.py`, plus `backend/app/pipeline/cache/__init__.py`, `backend/app/analysis/{reader_order,retrieval,plan_checks,packer}/__init__.py` and `backend/app/tasks/__init__.py`.
@@ -390,14 +405,42 @@ It drops `repos`, then `email_tokens`, then `users` (and their indexes).
 **Used by:** the CLIs described below; Layer 6 and Layer 7 are the intended consumers, but no code calls the pipeline from the API yet.
 
 *Built and tested: `clone`, `indexer`, `graph`, `chunking`, `retrieval`. Not built: `pipeline/cache`, every `analysis/` package and `tasks/` — each holds only an empty `__init__.py`, and none of the pipeline functions is called from an HTTP route.*
+=======
+**What it is:** The folder skeleton reserved for the deterministic half of the product — cloning repos, chunking, indexing, caching, building a code graph, and the analysis passes (reader order, retrieval, plan checks, context packing).
+**Why it exists:** The design rule is that deterministic analysis decides what is true; the AI only reasons over this evidence. Keeping it separate from `ai/` enforces that.
+**Files in it:** `backend/app/pipeline/clone/{__init__,clone,cleanup,filters,models,errors}.py`; the rest are empty markers — `backend/app/pipeline/{chunking,indexer,cache,graph}/__init__.py`, `backend/app/analysis/{reader_order,retrieval,plan_checks,packer}/__init__.py`, and `backend/app/tasks/__init__.py`.
+**Depends on:** Layer 1 (settings), Layer 2 (sessions), Layer 3 (models, e.g. `Repo`).
+**Used by:** the future AI Layer (as evidence) and the future HTTP API (to trigger and report status).
+
+*`pipeline/clone` is implemented (see its study note below). Every other file listed is still an empty `__init__.py` package marker.*
+>>>>>>> frontend-redesign
 
 #### Study Notes for this layer
 
 **What is `pipeline/clone`?**
+<<<<<<< HEAD
 `safe_clone(url, config)` shallow-clones a GitHub repo into a per-repo folder under `CLONE_ROOT` and returns a `CloneResult` (url, local path, commit SHA, size, skipped paths). Before cloning it asks GitHub (best-effort) for the repo size and raises `CloneError("size_exceeded")` when it exceeds `CLONE_MAX_SIZE_MB`; the local size is checked again after cloning, and the clone itself is bounded by `CLONE_TIMEOUT_SECONDS`. `clean_repo` then deletes skipped directories and secret files (`.git`, caches, `.env`, keys…), and the HEAD commit SHA is recorded so later steps can key their output to a commit.
 *Why do we need it?* Every downstream step needs a local copy, and an untrusted repo must not be able to fill the disk or hang the process.
 *What breaks without it?* Nothing to index, and a huge or malicious repo could exhaust the machine.
 *Think of it as:* the delivery truck that also refuses oversized parcels and removes hazardous contents before storage.
+=======
+Clones a repo into a sandboxed scratch folder and reads its commit SHA. `safe_clone()` (`clone.py`) validates the URL, rejects oversized repos (best-effort GitHub size probe before cloning, exact size after), shallow-clones with hooks/templates disabled and no shell, reads the HEAD SHA, then strips `.git`, ignored dirs and secret files. `CloneConfig` (`models.py`) carries the root, size limit and timeout; failures raise `CloneError` with a code (`errors.py`).
+*Why do we need it?* Everything downstream needs a local copy to read, plus the exact commit it read.
+*What breaks without it?* Nothing to index or analyze.
+*Think of it as:* the delivery truck bringing the package to the warehouse.
+
+**What is `pipeline/clone` cleanup?**
+Clones are temporary scratch space: the derived data and the commit SHA are kept, the folder is not. `clone_workspace()` (`cleanup.py`) is a context manager that clones and always deletes the folder in `finally` — on success, exception, timeout, or failed clone. `remove_clone(path, root)` deletes a folder only if it resolves inside the clone root (it refuses the root itself, outside paths and `..` tricks), unlinks symlinks instead of following them, and makes read-only git objects writable so deletion succeeds; a missing folder returns `False`. `sweep_stale_clones(max_age_seconds)` deletes direct child folders of the root older than `max_age_seconds` (mtime), logging and continuing past any single failure. The app runs a sweep once on startup (FastAPI lifespan, `main.py`), wrapped so a sweep error never blocks startup; the retention window comes from `CLONE_STALE_MAX_AGE_SECONDS` (default 3600). Failed, timed-out and oversized clones already remove their own partial folder.
+*Why do we need it?* Clones are scratch, not durable state — they must not pile up on disk.
+*What breaks without it?* Disk fills with stale clones and orphaned partial folders.
+*Think of it as:* wiping the prep counter clean after each dish is plated.
+
+**What is `pipeline/chunking`?**
+Reserved for splitting source files into analyzable chunks.
+*Why do we need it?* You can't embed or search whole repos at once.
+*What breaks without it?* Downstream code has no unit of content to index.
+*Think of it as:* cutting a long document into index cards.
+>>>>>>> frontend-redesign
 
 **What is `pipeline/indexer`?**
 `parse_source(source, file)` walks Python's `ast` and produces a `FileIndex`: every function, class and method as a `Symbol` (name, kind, `line_start`/`line_end`, signature, docstring, dotted `parent`), every import as an `ImportRef`, and every call as a `CallRef`. `index_repo(folder)` walks a folder with the ignore rules in `repo.py` (`IGNORED_DIRS`, `IGNORED_FILE_PREFIXES`, `IGNORED_FILE_SUFFIXES`), parses each `.py` file and returns a `RepoIndex`. `detect.py` classifies test files and finds entry points (route decorators, `__name__ == "__main__"` guards, argparse/Click/Typer CLIs), which the graph step uses as the start of the reading order. Analyzed code is parsed, never imported or executed.
@@ -920,6 +963,7 @@ Working now (verified by the current 202-test suite; see `docs/changes.md` for s
 - Settings & Configuration (`app/core/config.py`, `backend/.env`, `backend/.env.example`).
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
+<<<<<<< HEAD
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and two migrations creating `users`, `email_tokens`, `repos` and then adding `repos.commit_sha`.
 - HTTP API app factory (`app/main.py`): `create_app()`, CORS from `CORS_ORIGINS`, the slowapi limiter + 429 handler, global JSON error handlers, `GET /health`, and the `GET /evals` stub; runnable via `uvicorn app.main:app`.
 - Auth feature (`app/features/auth/router.py`, `app/features/auth/dependencies.py`): `POST /auth/signup`, `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`, and `GET /auth/me`, mounted in `main.py`.
@@ -954,6 +998,22 @@ Known open issues (current state, to fix before or while wiring the API):
 - `frontend-redesign` has two commits that are not merged into `phase1`: `0df4d61 feat : done cloning process` and `f041b99 feat : Delete the repo content after final block` (clone cleanup work).
 
 Part 1 status: **backend-complete and front-complete for the pages the backend supports.** Auth, repos, all Part 2–4 stubs, the error contract, tests, README, and the OpenAPI/Postman docs exist and pass, and the frontend pages (including the repo workspace that opens from a dashboard repo card) are built. The deterministic pipeline now exists as tested library/CLI code (safe clone, AST indexer, networkx graph, chunking, BM25) but is not connected to the API, to the `Repo` rows, or to the frontend. The workspace's graph, reader, plan and context views use clearly-badged "Demo data" until the Part 2–4 endpoints stop returning `501`. Note: to use the frontend against a local backend, add `http://localhost:5173` to `backend/.env`'s `CORS_ORIGINS` (the template defaults to port 3000).
+=======
+- Schema Migrations — `alembic.ini`, `alembic/env.py`, and the first migration creating `users`, `email_tokens`, `repos`.
+- Clone sandbox (`app/pipeline/clone/`) — `safe_clone` (validate, shallow clone, SHA, filter) plus scratch cleanup (`remove_clone`, `clone_workspace`, `sweep_stale_clones`) and a startup stale sweep (`main.py` lifespan).
+
+Not implemented yet:
+- HTTP API / FastAPI app factory (`app/main.py` is empty — no `app` object).
+- Request/response schemas (`app/schemas`), security helpers (`app/security`).
+- All feature routers (`app/features/*`: auth, repos, plan, indexing, context, reader).
+- Deterministic pipeline and analysis beyond clone (`app/pipeline/{chunking,indexer,cache,graph}`, `app/analysis/*`), background tasks (`app/tasks`).
+- AI layer (`app/ai/*`, `app/agent`).
+- Frontend (`frontend/` — `.gitkeep` only).
+- Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile).
+- Evals (`evals/*` — `.gitkeep` only) and helper scripts (`scripts/` — `.gitkeep` only).
+- Tests (`backend/tests` — empty package).
+- `README.md` (empty).
+>>>>>>> frontend-redesign
 
 ## Running It Locally
 
@@ -973,7 +1033,11 @@ Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
 - Required: `SECRET_KEY` (no default). Generate one with:
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+<<<<<<< HEAD
 - Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `VERIFY_TOKEN_EXPIRE_HOURS`, `RESET_TOKEN_EXPIRE_MINUTES`, `RATE_LIMIT_LOGIN`, `RATE_LIMIT_SIGNUP`, `RATE_LIMIT_FORGOT_PASSWORD`, `RATE_LIMIT_RESEND_VERIFICATION`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `CLONE_ROOT` (`data/clones`), `CLONE_MAX_SIZE_MB` (200), `CLONE_TIMEOUT_SECONDS` (120).
+=======
+- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `CLONE_ROOT`, `CLONE_MAX_SIZE_MB`, `CLONE_TIMEOUT_SECONDS`, `CLONE_STALE_MAX_AGE_SECONDS`.
+>>>>>>> frontend-redesign
 
 Create/verify the database (from `backend/`):
 ```bash
@@ -1036,7 +1100,11 @@ Start the backend first (from `backend/`, venv active) with `uvicorn app.main:ap
 - **Layer 7, `app/features/repos/`:** repo CRUD plus `get_owned_repo` are built; Part 2 flips `status` through the pipeline instead of leaving it at `"added"`.
 - **Layer 7, stub routers:** `app/features/{indexing,plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 2–4 (they already enforce ownership).
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
+<<<<<<< HEAD
 - **Layer 5, `app/pipeline/`:** clone, indexer, graph, chunking and retrieval exist as tested library + CLI code. What is missing is the HTTP wiring (endpoints, status tracking, `Repo.commit_sha`) and the `pipeline/cache` package; also narrow the clone URL allow-list before exposing cloning.
+=======
+- **Layer 5, `app/pipeline/clone` + `cache`:** wire `safe_clone` into a `Repo` row (persist the SHA). **TODO:** wrap the pipeline in `clone_workspace` when it's built, so each run deletes its scratch folder as soon as it's done.
+>>>>>>> frontend-redesign
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
 - **Layer 9:** fill `docker/docker-compose.yml` and add a Dockerfile; stand up the `evals/` harnesses.
 - **Tests:** `test_security.py`, `test_auth.py`, `test_repos.py`, `test_stubs.py` and `tests/pipeline/*` exist (202 passing) — extend them (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, real pipeline endpoints).

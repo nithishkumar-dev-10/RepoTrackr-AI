@@ -54,3 +54,20 @@ docker/ was added as a top-level folder in Step 0.7 (approved).
 1. Implement the feature
 2. Update project_summary.md (targeted insert only, no rewrite)
 3. Add the entry to changes.md
+
+
+## Working style
+- You are the builder. Do the work; do NOT teach, explain concepts, or add tutorial-style
+  commentary. I learn from external sources.
+- Keep replies short: what you changed, test results, and anything blocked.
+
+## Project summary (docs/)
+- Keep a single living summary at docs/PROJECT_SUMMARY.md.
+- After finishing any step or meaningful change, update it in the same turn:
+  - Current status of each step (Steps 0-7): DONE / PARTIAL / NOT STARTED
+  - What was built (modules, key files, public functions)
+  - Decisions made and why (one line each)
+  - Known issues / TODOs
+  - Test counts (total passing)
+- Update existing sections instead of appending duplicates. Never leave it stale.
+- Don't put secrets, tokens, or .env values in docs/.

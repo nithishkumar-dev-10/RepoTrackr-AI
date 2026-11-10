@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     CLONE_ROOT: str = "data/clones"
     CLONE_MAX_SIZE_MB: int = 200
     CLONE_TIMEOUT_SECONDS: int = 120
+    CLONE_STALE_MAX_AGE_SECONDS: int = 3600
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

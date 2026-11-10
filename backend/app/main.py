@@ -1,4 +1,6 @@
 import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -17,8 +19,20 @@ from app.features.indexing.router import router as indexing_router
 from app.features.plan.router import router as plan_router
 from app.features.reader.router import router as reader_router
 from app.features.repos.router import router as repos_router
+from app.pipeline.clone.cleanup import sweep_stale_clones
 
 logger = logging.getLogger("app")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    try:
+        removed = sweep_stale_clones(get_settings().CLONE_STALE_MAX_AGE_SECONDS)
+        if removed:
+            logger.info("Swept %d stale clone folder(s) on startup", removed)
+    except Exception:
+        logger.exception("Stale clone sweep failed on startup")
+    yield
 
 
 def _error_payload(
@@ -33,7 +47,7 @@ def _error_payload(
 def create_app() -> FastAPI:
     settings = get_settings()
 
-    app = FastAPI(title=settings.APP_NAME)
+    app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
     app.state.limiter = limiter
 

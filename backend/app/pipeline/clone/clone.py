@@ -1,14 +1,19 @@
 import hashlib
 import json
+import logging
 import os
+<<<<<<< HEAD
 import re
 import shutil
+=======
+>>>>>>> frontend-redesign
 import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
+from app.pipeline.clone.cleanup import remove_clone
 from app.pipeline.clone.errors import CloneError
 from app.pipeline.clone.filters import clean_repo
 from app.pipeline.clone.models import CloneConfig, CloneResult
@@ -20,6 +25,16 @@ GITHUB_API = "https://api.github.com/repos"
 SHA_LENGTH = 40
 # GitHub owner and repo names: letters, digits, dot, dash, underscore.
 GITHUB_NAME_PATTERN = re.compile(r"[A-Za-z0-9_.-]+")
+
+logger = logging.getLogger("app")
+
+
+def _discard(path: Path, root: Path | None = None) -> None:
+    """Best-effort removal of a partial clone; never masks the original error."""
+    try:
+        remove_clone(path, root=root if root is not None else path.parent)
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to clean partial clone %s: %s", path, exc)
 
 
 def safe_clone(url: str, config: CloneConfig) -> CloneResult:
@@ -51,21 +66,21 @@ def _clone_repository(url: str, config: CloneConfig) -> CloneResult:
 
     config.root.mkdir(parents=True, exist_ok=True)
     if dest.exists():
-        shutil.rmtree(dest, ignore_errors=True)
+        remove_clone(dest, root=config.root)
 
     _git_clone(url, dest, config.timeout_seconds)
 
     try:
         commit_sha = _read_commit_sha(dest)
     except CloneError:
-        shutil.rmtree(dest, ignore_errors=True)
+        _discard(dest, config.root)
         raise
 
     skipped_paths = clean_repo(dest)
     size_bytes = _dir_size_bytes(dest)
 
     if size_bytes > config.max_size_bytes:
-        shutil.rmtree(dest, ignore_errors=True)
+        _discard(dest, config.root)
         raise CloneError(
             "size_exceeded",
             f"Repository is {size_bytes} bytes, over the "
@@ -260,15 +275,16 @@ def _git_clone(url: str, dest: Path, timeout_seconds: int) -> None:
             check=False,
         )
     except FileNotFoundError as exc:
+        _discard(dest)
         raise CloneError("git_not_found", "The 'git' executable was not found.") from exc
     except subprocess.TimeoutExpired as exc:
-        shutil.rmtree(dest, ignore_errors=True)
+        _discard(dest)
         raise CloneError(
             "timeout", f"Clone exceeded the {timeout_seconds}s time limit."
         ) from exc
 
     if completed.returncode != 0:
-        shutil.rmtree(dest, ignore_errors=True)
+        _discard(dest)
         detail = (completed.stderr or completed.stdout or "").strip().splitlines()
         message = detail[-1] if detail else "git clone failed."
         raise CloneError("git_failed", message)
