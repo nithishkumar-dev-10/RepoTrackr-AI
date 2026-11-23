@@ -4,7 +4,7 @@ RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reas
 
 **Design rule:** deterministic analysis decides what is true (AST, graph, static checks); the AI only retrieves, reasons over evidence and explains. Every AI claim cites `file:line`. If the AI is unavailable, the index and static checks still work.
 
-The project is built in four parts (see `docs/RepoTrackr-AI-Execution-Plan.md`). **Part 1 (this repo's current state)** is the full-stack foundation with no pipeline and no AI: accounts, email verification, password reset, and saved repo links.
+The project is built in four parts (see `docs/RepoTrackr-AI-Execution-Plan.md`). **Part 1 (this repo's current state)** is the full-stack foundation: accounts, email verification, password reset, saved repo links and a React frontend. The deterministic pipeline (clone, indexer, graph, chunking, BM25 retrieval) exists as tested library/CLI code but is not wired to the API; there is no AI layer.
 
 ## Tech stack
 
@@ -16,15 +16,16 @@ The project is built in four parts (see `docs/RepoTrackr-AI-Execution-Plan.md`).
 - **argon2-cffi** (password hashing), **PyJWT** (JWT access/refresh tokens)
 - **slowapi** (per-IP rate limiting), **python-multipart** (file uploads), **email-validator**
 - SMTP email (dev fallback logs messages to the console)
+- **React 19** + **TypeScript** + **Vite** (frontend), Tailwind CSS, framer-motion, react-router-dom
 
-## What works today (Part 1 backend)
+## What works today (Part 1)
 
 - Full email/password auth: signup, email verification, resend, login, refresh, logout, forgot/reset/change password, delete account, `GET /auth/me`, with rate limiting on the abuse-prone endpoints.
 - Repo records: add, list, get and delete saved GitHub links (per-user, duplicate-blocked).
 - Stub endpoints for Parts 2–4 are registered so the frontend can wire them now; each returns `501 {"status": "not_implemented"}`.
 - Consistent JSON error envelope, CORS, and Swagger docs at `/docs`.
 
-The frontend is a separate deliverable and is not in this repository yet (`frontend/` is empty).
+The frontend (`frontend/`) lives in this repository: landing, signup/login/verify-email/forgot-password/reset-password, account settings, dashboard, repo workspace and Developer page. It calls the live `/auth` and `/repos` routes; the Part 2–4 views show a "Demo data" badge while those endpoints return `501`.
 
 ## Setup from scratch
 
@@ -94,7 +95,7 @@ RepoTrackr-AI/
 │   │   │   ├── reader/     #   Part 3 stubs
 │   │   │   └── context/    #   Part 3 stubs
 │   │   ├── agent/          # Part 4 stub(s)
-│   │   ├── pipeline/       # Part 2 (empty)
+│   │   ├── pipeline/       # clone (+ cleanup), indexer, graph, chunking, BM25 retrieval (library/CLI)
 │   │   ├── analysis/       # Part 3 deterministic analysis (empty)
 │   │   ├── ai/             # Part 3 AI (empty)
 │   │   └── main.py         # app factory, middleware, error handlers, routers
@@ -102,7 +103,7 @@ RepoTrackr-AI/
 ├── docker/                 # docker-compose.yml (not set up yet)
 ├── docs/                   # API contract, mock responses, summaries, change log
 ├── evals/                  # Part 4 eval harnesses (empty)
-├── frontend/               # team deliverable (empty)
+├── frontend/               # React/Vite app (auth pages, dashboard, repo workspace, settings)
 └── scripts/                # helper scripts (empty)
 ```
 

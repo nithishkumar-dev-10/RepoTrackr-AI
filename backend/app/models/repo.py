@@ -19,7 +19,9 @@ class Repo(Base):
     url: Mapped[str] = mapped_column(String(500), nullable=False)
     owner: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="added", nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(50), default="added", server_default="added", nullable=False
+    )
     commit_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
