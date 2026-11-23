@@ -161,7 +161,10 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          Can’t log in?{' '}
+          <Link to="/forgot-password" className="text-brand hover:underline">
+            Forgot your password?
+          </Link>
+          {' · '}
           <Link to="/verify-email" className="text-brand hover:underline">
             Verify your email
           </Link>

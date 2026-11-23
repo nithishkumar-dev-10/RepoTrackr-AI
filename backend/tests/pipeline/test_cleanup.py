@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
@@ -14,7 +15,7 @@ from app.pipeline.clone.cleanup import (
     sweep_stale_clones,
 )
 from app.pipeline.clone.errors import CloneError
-from app.pipeline.clone.models import CloneConfig
+from app.pipeline.clone.models import CloneConfig, CloneResult
 
 from .conftest import make_git_repo
 
@@ -31,6 +32,19 @@ def _config(root: Path, **overrides) -> CloneConfig:
 
 def _children(root: Path) -> list[Path]:
     return list(root.iterdir()) if root.exists() else []
+
+
+def _local_clone(url: str, config: CloneConfig) -> CloneResult:
+    """Test-only stand-in for ``safe_clone`` using local ``file://`` fixtures.
+
+    Production only accepts public GitHub HTTPS URLs; these offline tests
+    need a real git repo on disk. Skip the allow-list but still refuse
+    anything that is not a local path, and keep every other clone limit.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "file" or not parsed.path.startswith("/"):
+        raise CloneError("invalid_url", "Test fixtures must be local file:// URLs.")
+    return clone_module._clone_repository(url, config)
 
 
 def test_remove_clone_deletes_readonly_nested(tmp_path: Path) -> None:
@@ -103,9 +117,12 @@ def test_remove_clone_missing_folder_returns_false(tmp_path: Path) -> None:
 
 
 @requires_git
-def test_clone_workspace_deletes_on_success(tmp_path: Path) -> None:
+def test_clone_workspace_deletes_on_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = make_git_repo(tmp_path / "source")
     config = _config(tmp_path / "clones")
+    monkeypatch.setattr(clone_module, "safe_clone", _local_clone)
 
     with clone_workspace(source.as_uri(), config) as result:
         path = result.path
@@ -115,9 +132,12 @@ def test_clone_workspace_deletes_on_success(tmp_path: Path) -> None:
 
 
 @requires_git
-def test_clone_workspace_deletes_on_exception(tmp_path: Path) -> None:
+def test_clone_workspace_deletes_on_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     source = make_git_repo(tmp_path / "source")
     config = _config(tmp_path / "clones")
+    monkeypatch.setattr(clone_module, "safe_clone", _local_clone)
 
     with pytest.raises(RuntimeError):
         with clone_workspace(source.as_uri(), config) as result:
@@ -184,9 +204,12 @@ def test_sweep_continues_past_failure(
 
 
 @requires_git
-def test_failed_clone_leaves_no_folder(tmp_path: Path) -> None:
+def test_failed_clone_leaves_no_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config = _config(tmp_path / "clones")
     missing = (tmp_path / "does-not-exist").as_uri()
+    monkeypatch.setattr(clone_module, "safe_clone", _local_clone)
 
     with pytest.raises(CloneError) as exc:
         clone_module.safe_clone(missing, config)
@@ -206,6 +229,7 @@ def test_timed_out_clone_leaves_no_folder(
         raise subprocess.TimeoutExpired(cmd="git", timeout=1)
 
     monkeypatch.setattr(clone_module.subprocess, "run", _boom)
+    monkeypatch.setattr(clone_module, "safe_clone", _local_clone)
 
     with pytest.raises(CloneError) as exc:
         clone_module.safe_clone(source.as_uri(), config)
@@ -223,6 +247,7 @@ def test_oversized_clone_leaves_no_folder(
     monkeypatch.setattr(
         clone_module, "_dir_size_bytes", lambda root: 10 * 1024 * 1024
     )
+    monkeypatch.setattr(clone_module, "safe_clone", _local_clone)
 
     with pytest.raises(CloneError) as exc:
         clone_module.safe_clone(source.as_uri(), config)
