@@ -139,6 +139,17 @@ def _issue_tokens(db: Session, user: User) -> TokenResponse:
     return response
 
 
+def _revoke_all_refresh_tokens(db: Session, user_id: int) -> None:
+    db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+
+
 def _invalidate_active_tokens(
     db: Session, user_id: int, token_type: EmailTokenType
 ) -> None:
@@ -332,17 +343,6 @@ def reset_password(
     payload: ResetPasswordRequest, db: Session = Depends(get_db)
 ) -> MessageResponse:
     token_hash = hash_token(payload.token)
-    user_id = db.scalar(
-        select(EmailToken.user_id).where(
-            EmailToken.token_hash == token_hash,
-            EmailToken.type == EmailTokenType.RESET,
-        )
-    )
-    if user_id is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
-        )
-
     now = datetime.now(timezone.utc)
     result = db.execute(
         update(EmailToken)
@@ -353,13 +353,16 @@ def reset_password(
             EmailToken.expires_at > now,
         )
         .values(used_at=now)
+        .returning(EmailToken.user_id)
     )
-    if result.rowcount != 1:
+    consumed = result.all()
+    if len(consumed) != 1:
         db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
         )
 
+    user_id = consumed[0][0]
     user = db.get(User, user_id)
     if user is None:
         db.rollback()
@@ -390,6 +393,7 @@ def change_password(
         )
 
     current_user.password_hash = hash_password(payload.new_password)
+    _revoke_all_refresh_tokens(db, current_user.id)
     db.commit()
 
     return MessageResponse(message="Password changed.")
@@ -400,6 +404,7 @@ def delete_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MessageResponse:
+    _revoke_all_refresh_tokens(db, current_user.id)
     db.delete(current_user)
     db.commit()
 

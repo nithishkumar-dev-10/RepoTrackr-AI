@@ -505,6 +505,25 @@ def test_change_password_requires_auth(client):
     assert response.status_code == 401
 
 
+def test_change_password_revokes_refresh_tokens(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    tokens = _login(client).json()
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": PASSWORD, "new_password": "newsecret123"},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 401
+    )
+
+
 # --- delete account ---
 
 
@@ -516,6 +535,24 @@ def test_delete_account_then_login_fails(client, sent_emails):
     assert response.status_code == 200
     assert response.json() == {"message": "Account deleted."}
     assert _login(client).status_code == 401
+
+
+def test_delete_account_revokes_refresh_tokens(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    tokens = _login(client).json()
+
+    response = client.delete(
+        "/auth/account",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 401
+    )
 
 
 def test_delete_account_requires_auth(client):

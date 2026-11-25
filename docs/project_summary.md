@@ -1,7 +1,7 @@
 # Project Summary
 
 ## What This Project Is
-RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. The backend has settings, the database engine, the SQLAlchemy models, two Alembic migrations, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh, logout, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). The Part 2 index endpoints now run the pipeline in a `BackgroundTasks` job; the remaining Part 3–4 endpoints are still ownership-checked stubs that return `501 {"status": "not_implemented"}`. A complete React + TypeScript + Vite frontend lives in `frontend/`: a landing page, signup/login/verify-email/forgot-password/reset-password, account settings, a dashboard, a repo workspace (dark 3D code-graph canvas with Overview/Reader/Plan/Context tabs and a ⌘K command bar) and a Developer page. The Overview tab and index controls call the real Part 2 endpoints; the graph and the Part 3–4 query modes still use local mock data, with the fake-evidence labels marked "Not implemented yet".
+RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. The backend has settings, the database engine, the SQLAlchemy models, four Alembic migrations, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh with stored refresh-token hashes, logout with server-side refresh revocation, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). The Part 2 index endpoints now run the pipeline in a `BackgroundTasks` job; the remaining Part 3–4 endpoints are still ownership-checked stubs that return `501 {"status": "not_implemented"}`. A complete React + TypeScript + Vite frontend lives in `frontend/`: a landing page, signup/login/verify-email/forgot-password/reset-password, account settings, a dashboard, a repo workspace (dark 3D code-graph canvas with Overview/Reader/Plan/Context tabs and a ⌘K command bar) and a Developer page. The Overview tab and index controls call the real Part 2 endpoints; the graph and the Part 3–4 query modes still use local mock data, with the fake-evidence labels marked "Not implemented yet".
 
 The deterministic indexing path is now wired end to end: `app/tasks/__init__.py` runs clone → AST index → graph → chunk after `POST /repos/{id}/index`, persists `Repo.status`, `Repo.error_message`, `Repo.commit_sha` and a JSON index summary, and skips work when the commit SHA is unchanged. The cache check accepts both `ready` and `queued`, because the HTTP start endpoint writes `queued` before the background task runs. `app/pipeline/clone/` performs a safe shallow clone with size/timeout limits and secret/junk cleanup; `app/pipeline/indexer/` parses Python source with `ast` into symbols, imports and calls; `app/pipeline/graph/` turns that index into a networkx module/symbol graph with PageRank centrality, a suggested reading order and a Mermaid diagram; `app/pipeline/chunking/` cuts the index into one chunk per function/class/method, counts tokens with `tiktoken` and caches chunks per file hash in SQLite; and `app/pipeline/retrieval/` ranks those stored chunks with BM25 as a CLI/library only. `app/analysis/*`, `app/ai/*` and `app/agent` are still empty or stub-only: there is no LLM provider (Gemini or otherwise), no embeddings, no eval set, and no retrieval/agent endpoint.
 
@@ -24,7 +24,8 @@ RepoTrackr-AI/
 │   │   └── versions/
 │   │       ├── 9dbee76d77e4_create_users_email_tokens_repos.py  # First migration
 │   │       ├── 09282e667a32_add_commit_sha_to_repos.py          # Adds repos.commit_sha
-│   │       └── b7c1f2a9d4e6_add_repo_index_fields.py             # Adds repos.error_message + repos.index_summary
+│   │       ├── b7c1f2a9d4e6_add_repo_index_fields.py             # Adds repos.error_message + repos.index_summary
+│   │       └── c4d8e7a1b2f3_add_refresh_tokens.py                # Adds refresh_tokens
 │   ├── app/
 │   │   ├── __init__.py              # Empty package marker
 │   │   ├── main.py                  # FastAPI app factory: create_app(), CORS, error handlers, GET /health
@@ -35,9 +36,10 @@ RepoTrackr-AI/
 │   │   │   ├── email.py             # send_email (SMTP/dev console), verify + reset email helpers
 │   │   │   └── ratelimit.py         # slowapi Limiter (per-IP) used by auth endpoints
 │   │   ├── models/
-│   │   │   ├── __init__.py          # Re-exports User, EmailToken, Repo
+│   │   │   ├── __init__.py          # Re-exports User, EmailToken, RefreshToken, Repo
 │   │   │   ├── user.py              # User table + relationships
 │   │   │   ├── email_token.py       # EmailToken table + EmailTokenType enum
+│   │   │   ├── refresh_token.py     # RefreshToken table: hashed refresh tokens with revocation
 │   │   │   └── repo.py              # Repo table: status, error_message, commit_sha, index_summary
 │   │   ├── schemas/
 │   │   │   ├── __init__.py          # Re-exports all schemas
@@ -125,7 +127,7 @@ RepoTrackr-AI/
 │       ├── __init__.py              # Test package marker
 │       ├── conftest.py              # Test env vars + temp DB, TestClient and fixtures
 │       ├── test_security.py         # Security unit tests (18)
-│       ├── test_auth.py             # Auth endpoint tests (37)
+│       ├── test_auth.py             # Auth endpoint tests (42)
 │       ├── test_repos.py            # Repo CRUD endpoint tests (19)
 │       ├── test_stubs.py            # Part 3-4 stub tests, 501 / 401 / 404 (20)
 │       ├── test_indexing.py         # Index flow, status, summary, cache, ownership (10)
@@ -281,9 +283,9 @@ It's only added for SQLite URLs so FastAPI can use a connection across threads.
 
 ### Layer 3: Data Models
 
-**What it is:** The SQLAlchemy ORM classes that define the `users`, `email_tokens`, and `repos` tables and their relationships.
+**What it is:** The SQLAlchemy ORM classes that define the `users`, `email_tokens`, `refresh_tokens`, and `repos` tables and their relationships.
 **Why it exists:** Separating the table definitions from the engine and from request schemas keeps the persistence shape in one obvious place.
-**Files in it:** `backend/app/models/user.py` (`User`), `backend/app/models/email_token.py` (`EmailToken`, `EmailTokenType`), `backend/app/models/repo.py` (`Repo`), and `backend/app/models/__init__.py` (re-exports all three + the enum).
+**Files in it:** `backend/app/models/user.py` (`User`), `backend/app/models/email_token.py` (`EmailToken`, `EmailTokenType`), `backend/app/models/refresh_token.py` (`RefreshToken`), `backend/app/models/repo.py` (`Repo`), and `backend/app/models/__init__.py` (re-exports all four + the enum).
 **Depends on:** Layer 2 (`Base`).
 **Used by:** Schema Migrations (metadata for autogenerate) and all future feature/API code.
 
@@ -296,8 +298,8 @@ The model for a person: `id`, unique indexed `email`, `password_hash`, `is_verif
 *Think of it as:* the account card at the top of every other document in a filing cabinet.
 
 **What are the `User` relationships?**
-`email_tokens` and `repos` are `relationship(...)` lists with `cascade="all, delete-orphan"` and `passive_deletes=True`.
-*Why do we need it?* They let you reach a user's tokens/repos in Python and define what happens on delete.
+`email_tokens`, `refresh_tokens`, and `repos` are `relationship(...)` lists with `cascade="all, delete-orphan"` and `passive_deletes=True`.
+*Why do we need it?* They let you reach a user's email tokens, refresh tokens and repos in Python and define what happens on delete.
 *What breaks without it?* Deleting a user would not clean up children (or would do it inefficiently in Python instead of the DB).
 *Think of it as:* closing your account and having the bank automatically shred all linked statements.
 
@@ -306,6 +308,12 @@ A model storing a hashed one-time token per user: `user_id`, `type`, `token_hash
 *Why do we need it?* Email verification and password reset both need short-lived, single-use tokens.
 *What breaks without it?* Password reset and email verification have nowhere to store/validate their tokens.
 *Think of it as:* a numbered claim ticket you swap for a service, then it's stamped used.
+
+**What is `RefreshToken`?**
+A model storing the SHA-256 hash of an issued refresh JWT: `user_id`, indexed `token_hash`, `expires_at`, nullable `revoked_at`, and `created_at`.
+*Why do we need it?* Login and refresh record the token hash, refresh rejects unknown/revoked/expired hashes, logout revokes the presented hash, and password change/account deletion revoke every active row.
+*What breaks without it?* A logout or password change would not invalidate refresh tokens already handed to the browser.
+*Think of it as:* a revocable receipt for each refresh token, filed by its fingerprint rather than the token itself.
 
 **What is `EmailTokenType`?**
 A `str` enum with `VERIFY = "verify"` and `RESET = "reset"`, stored as a DB enum named `email_token_type`.
@@ -337,7 +345,7 @@ It imports and re-exports `User`, `EmailToken`, `EmailTokenType`, and `Repo` via
 
 **What it is:** The version-controlled set of database changes, plus the glue that feeds settings and model metadata into Alembic.
 **Why it exists:** So the schema can be created/upgraded/downgraded predictably across machines instead of relying on `create_all()`.
-**Files in it:** `backend/alembic.ini` (config, no hardcoded URL), `backend/alembic/env.py` (wires settings + `Base` + models), `backend/alembic/versions/9dbee76d77e4_create_users_email_tokens_repos.py` (creates the three tables), `backend/alembic/versions/09282e667a32_add_commit_sha_to_repos.py` (adds `repos.commit_sha`), `backend/alembic/versions/b7c1f2a9d4e6_add_repo_index_fields.py` (adds `repos.error_message` and `repos.index_summary`), `backend/alembic/script.py.mako` (template for new migrations), `backend/alembic/README`.
+**Files in it:** `backend/alembic.ini` (config, no hardcoded URL), `backend/alembic/env.py` (wires settings + `Base` + models), `backend/alembic/versions/9dbee76d77e4_create_users_email_tokens_repos.py` (creates the three tables), `backend/alembic/versions/09282e667a32_add_commit_sha_to_repos.py` (adds `repos.commit_sha`), `backend/alembic/versions/b7c1f2a9d4e6_add_repo_index_fields.py` (adds `repos.error_message` and `repos.index_summary`), `backend/alembic/versions/c4d8e7a1b2f3_add_refresh_tokens.py` (creates `refresh_tokens`), `backend/alembic/script.py.mako` (template for new migrations), `backend/alembic/README`.
 **Depends on:** Layer 1 (Settings), Layer 2 (`Base`), Layer 3 (models so metadata is populated).
 **Used by:** developers and deploy steps — nothing above it calls it directly.
 
@@ -554,7 +562,7 @@ The complete Part 1 auth feature: `router.py` implements `POST /auth/signup`, `P
 *Think of it as:* the reception desk that issues your badge.
 
 **What does the auth `router.py` do?**
-It exposes the auth endpoints on an `APIRouter(prefix="/auth")`. Signup normalizes the email to lowercase, rejects duplicates (409), hashes the password, stores an unverified `User`, creates a `VERIFY` email token and sends the verification link. `verify-email` looks up the token by its hash and rejects invalid/expired/used tokens (400) before marking the user verified and the token used. `resend-verification` always returns the same 200 message (no account enumeration) and only sends when the account exists and is unverified, invalidating older unused verify tokens. `login` checks the password (401 on mismatch) and blocks unverified users (403) before issuing access + refresh tokens. `refresh` accepts only a refresh token (an access token is rejected 401), re-checks that the user still exists and is verified, and returns a new pair. `logout` confirms success but is client-side only (no revocation table). `forgot-password` always returns the same 200 message, and only for an existing user creates a single-use `RESET` token and sends the email in the background. `reset-password` validates a valid/unexpired/unused `RESET` token, applies the password rule, sets the new hash and stamps `used_at`. `change-password` verifies the current password, rejects reusing the old password, and sets the new hash. `delete-account` deletes the user (cascading to tokens and repos). `/auth/me` returns the current user.
+It exposes the auth endpoints on an `APIRouter(prefix="/auth")`. Signup normalizes the email to lowercase, rejects duplicates (409), hashes the password, stores an unverified `User`, creates a `VERIFY` email token and sends the verification link. `verify-email` looks up the token by its hash and rejects invalid/expired/used tokens (400) before marking the user verified and the token used. `resend-verification` always returns the same 200 message (no account enumeration) and only sends when the account exists and is unverified, invalidating older unused verify tokens. `login` checks the password (401 on mismatch), blocks unverified users (403), issues access + refresh tokens, and records the refresh token's SHA-256 hash in `refresh_tokens`. `refresh` accepts only a refresh token (an access token is rejected 401), requires the presented hash to be stored, unrevoked and unexpired, revokes that row, and returns a fresh pair; because JWT `iat`/`exp` have second resolution, an identical newly issued token reactivates the same row instead of creating a duplicate. `logout` requires a bearer access token and, when `refresh_token` is supplied, revokes that stored refresh token server-side. `forgot-password` always returns the same 200 message, and only for an existing user creates a single-use `RESET` token and sends the email in the background. `reset-password` consumes the token with one conditional `UPDATE ... WHERE used_at IS NULL AND expires_at > now ... RETURNING user_id`, checks that exactly one row was consumed, then applies the password rule and sets the new hash. `change-password` verifies the current password, rejects reusing the old password, sets the new hash and revokes all of the user's refresh tokens. `delete-account` revokes those tokens and deletes the user (cascading to email tokens and repos). `/auth/me` returns the current user.
 *Why do we need it?* It is the concrete account lifecycle the rest of the app is gated behind.
 *What breaks without it?* Accounts can't be created, recovered, or managed, so nothing downstream can be owned by a user.
 *Think of it as:* the reception desk that checks your ID, issues your badge, hands out reprints, and shreds your file when you leave.
@@ -620,7 +628,7 @@ Part 3's reader feature; for now a stub router exposing `GET /repos/{repo_id}/re
 *Think of it as:* a guided-tour desk that is staffed but has no itinerary yet.
 
 **What is `schemas`?**
-The Pydantic request/response models for the API: `common.py` (error/message envelopes), `auth.py` (auth requests, `TokenResponse`, `UserOut`, password rule), `repo.py` (`RepoCreate`/`RepoOut`/`RepoListOut`, GitHub URL parsing), `indexing.py` (`IndexStartOut`, `IndexStatusOut`, `IndexSummaryOut`), `stub.py` (`StubQueryRequest` = `{query, mode}` for the Part 3 stub endpoints), re-exported from `__init__.py`.
+The Pydantic request/response models for the API: `common.py` (error/message envelopes), `auth.py` (auth requests including optional `LogoutRequest`, `TokenResponse`, `UserOut`, password rule), `repo.py` (`RepoCreate`/`RepoOut`/`RepoListOut`, GitHub URL parsing), `indexing.py` (`IndexStartOut`, `IndexStatusOut`, `IndexSummaryOut`), `stub.py` (`StubQueryRequest` = `{query, mode}` for the Part 3 stub endpoints), re-exported from `__init__.py`.
 *Why do we need it?* ORM models must not leak straight to the API; schemas validate input and shape output.
 *What breaks without it?* No input validation or response contracts.
 *Think of it as:* customs forms that standardize what can cross the border.
@@ -714,7 +722,7 @@ The route table: `/` (Landing) and `/verify-email` are public, `/login`, `/signu
 *Think of it as:* the building directory plus the badge-check at each floor.
 
 **What is `src/api/client.ts`?**
-The thin `fetch` wrapper: prefixes `VITE_API_URL`, JSON-encodes bodies, attaches the bearer access token, does one refresh-and-retry on a `401`, parses the backend `{"error": {...}}` envelope into an `ApiError`, and records each call for the Developer page's activity log.
+The thin `fetch` wrapper: prefixes `VITE_API_URL`, JSON-encodes bodies, attaches the bearer access token, does one refresh-and-retry on a `401`, clears stored tokens when that refresh fails (which makes `AuthContext` set `anonymous` and `ProtectedRoute` redirect to `/login`), parses the backend `{"error": {...}}` envelope into an `ApiError`, and records each call for the Developer page's activity log.
 *Why do we need it?* Every request needs the same base URL, auth header, refresh and error handling instead of repeating it per call.
 *What breaks without it?* Tokens aren't attached or refreshed, and each caller parses errors differently.
 *Think of it as:* the single reception line every request goes through before reaching the API.
@@ -726,7 +734,7 @@ The API boundary. The Part 2 functions (`startIndex`, `getIndexStatus`, `getInde
 *Think of it as:* a placeholder actor who steps in only when the lead hasn't arrived, with a sign saying so.
 
 **What is `src/api/auth.ts` / `src/api/repos.ts`?**
-Typed wrappers over the real endpoints: `signup`, `login`, `verifyEmail`, `resendVerification`, `me`, `logout`, `forgotPassword`, `resetPassword`, `changePassword`, `deleteAccount`; and `listRepos`, `createRepo`, `getRepo`, `deleteRepo` (plus `mapRepoStatus`, `isRepoStatusActive` and `REPO_STATUS_LABEL` for the status chip and polling decision).
+Typed wrappers over the real endpoints: `signup`, `login`, `verifyEmail`, `resendVerification`, `me`, `logout` (sends the stored refresh token for server-side revocation), `forgotPassword`, `resetPassword`, `changePassword`, `deleteAccount`; and `listRepos`, `createRepo`, `getRepo`, `deleteRepo` (plus `mapRepoStatus`, `isRepoStatusActive` and `REPO_STATUS_LABEL` for the status chip and polling decision).
 *Why do we need it?* Screens call small typed functions instead of hand-building requests and mapping wire shapes.
 *What breaks without it?* Components would know about URLs and raw JSON shapes.
 *Think of it as:* the front desk's list of "the exact forms to fill in" for each service.
@@ -810,7 +818,7 @@ Three things run end to end right now: applying the database schema, serving the
 3. **Config (Layer 1).** `get_settings()` reads `backend/.env`, validates it into a cached `Settings`, and returns `DATABASE_URL = "sqlite:///./repotrackr.db"`.
 4. **URL + metadata (Layer 4).** `env.py` calls `config.set_main_option("sqlalchemy.url", ...)` with that URL and sets `target_metadata = Base.metadata`.
 5. **Engine (Layer 4 -> 2).** `run_migrations_online()` builds an engine via `engine_from_config` and connects.
-6. **Migrations (Layer 4).** Alembic compares `alembic_version` against the revision chain and runs, in order, `9dbee76d77e4_create_users_email_tokens_repos.py` (issues `CREATE TABLE` for `users`, `email_tokens`, and `repos`, plus indexes, foreign keys, the `email_token_type` enum, `uq_user_repo_url`, and defaults), `09282e667a32_add_commit_sha_to_repos.py` (batch-adds the nullable `repos.commit_sha` column), and `b7c1f2a9d4e6_add_repo_index_fields.py` (batch-adds nullable `repos.error_message` and `repos.index_summary`).
+6. **Migrations (Layer 4).** Alembic compares `alembic_version` against the revision chain and runs, in order, `9dbee76d77e4_create_users_email_tokens_repos.py` (issues `CREATE TABLE` for `users`, `email_tokens`, and `repos`, plus indexes, foreign keys, the `email_token_type` enum, `uq_user_repo_url`, and defaults), `09282e667a32_add_commit_sha_to_repos.py` (batch-adds the nullable `repos.commit_sha` column), and `b7c1f2a9d4e6_add_repo_index_fields.py` (batch-adds nullable `repos.error_message` and `repos.index_summary`), then `c4d8e7a1b2f3_add_refresh_tokens.py` (creates `refresh_tokens` with hashed token, expiry and revocation columns).
 7. **Output.** `backend/repotrackr.db` now exists with those tables (and `alembic_version`). `alembic check` then reports "No new upgrade operations detected" because the models match the migration chain.
 
 ```
@@ -861,9 +869,9 @@ The auth feature ties Layers 1–4 and 7 together:
 1. **Signup (Layer 7).** `POST /auth/signup` validates the body (`SignupRequest`, 422 on a weak password), rejects an existing email (409), hashes the password (`security.hash_password`), inserts an unverified `User` (Layers 2–3, `get_db()`), creates a `VERIFY` `EmailToken` storing only `security.hash_token(raw)` with `security.expires_at("verify")`, then calls `core/email.send_verification_email(email, raw)`. With `SMTP_HOST` set it sends via SMTP; otherwise it logs the link to the console. This endpoint (and forgot-password/resend/login) passes through the `@limiter.limit` check first (429 when exceeded).
 2. **Verify (Layer 7).** `POST /auth/verify-email` hashes the submitted token, looks up the matching `VERIFY` `EmailToken`, and rejects it with 400 when missing, used (`is_used`) or expired (`is_expired`). On success it stamps `used_at` and sets the user's `is_verified = True`.
 3. **Login (Layer 7).** `POST /auth/login` loads the user by normalized email, checks the password with `security.verify_password` (401 on mismatch), returns 403 while unverified, and otherwise returns `TokenResponse` with `create_access_token(user.id)` and `create_refresh_token(user.id)`.
-4. **Refresh (Layer 7).** `POST /auth/refresh` decodes the submitted token as a refresh token (an access token fails), confirms the user still exists and is verified, and returns a fresh pair.
+4. **Refresh (Layer 7).** `POST /auth/refresh` decodes the submitted token as a refresh token (an access token fails), confirms the user still exists and is verified, requires an active stored hash, revokes it and returns a fresh pair; an identical same-second token reactivates the same stored row.
 5. **Me / protected routes (Layer 7).** `GET /auth/me` (and `logout`, `change-password`, `DELETE /account`) depend on `features/auth/dependencies.get_current_user`, which decodes the Bearer access token and loads the user.
-6. **Forgot / reset (Layer 7).** `POST /auth/forgot-password` always returns the same 200 message; for an existing user it creates a single-use `RESET` token and schedules `core/email.send_reset_email` as a background task. `POST /auth/reset-password` validates the token (valid/unexpired/unused/type reset), applies the password rule, sets the new hash and stamps `used_at`.
+6. **Forgot / reset (Layer 7).** `POST /auth/forgot-password` always returns the same 200 message; for an existing user it creates a single-use `RESET` token and schedules `core/email.send_reset_email` as a background task. `POST /auth/reset-password` consumes the token with one conditional `UPDATE ... WHERE used_at IS NULL AND expires_at > now`, checks the consumed row count, applies the password rule and sets the new hash.
 
 ```
 Browser ──POST /auth/signup──► app/main.py:app ──► features/auth/router.py
@@ -1003,7 +1011,7 @@ Working now (verified by the current 266-test suite; see `docs/changes.md` for s
 - Request/response schemas (`app/schemas/{common,auth,repo,indexing,stub}.py`) and the documented contract (`docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/postman_collection.json`).
 - Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing, JWT access/refresh with type-checked `decode_token`, and verify/reset email-token helpers.
 - `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map and docs links.
-- Tests (`backend/tests/`): **266 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 37, `test_repos.py` 19, `test_stubs.py` 20, `test_schema_defaults.py` 2, `test_indexing.py` 10, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_retrieval.py` 19.
+- Tests (`backend/tests/`): **271 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_repos.py` 19, `test_stubs.py` 20, `test_schema_defaults.py` 2, `test_indexing.py` 10, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_retrieval.py` 19.
 - Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `npm run typecheck`, `npm run lint` (4 pre-existing warnings, 0 errors; no hook warnings) and `npm run build` pass; no frontend test script is configured. Part 2 routes are live; the graph and Part 3–4 query modes remain labelled mock data.
 
 Not built yet (current absences, not a plan):
@@ -1017,6 +1025,7 @@ Known open issues (current state):
 - The fallback in `src/api/galaxy.ts` still triggers on any non-`401`/`403` failure, so real network or `500` errors in the remaining mock routes render as fake evidence instead of an error state. Part 2 routes have no fallback.
 - `docs/api_contract.md`, `docs/openapi.json` and `docs/postman_collection.json` now describe the live Part 2 index routes (`202`/`200`/`409`/`500` where applicable) and their real schemas; only the Part 3–4 routes remain documented as `501` stubs.
 - No frontend test script or test files exist; verification is limited to typecheck, lint, production build and headless-browser checks.
+- Refresh is keep/reissue rather than guaranteed rotation: JWT `iat`/`exp` have second resolution, so a refresh in the same second returns the identical token string and reactivates its stored hash.
 - Clone URL allow-list: **fixed**. `safe_clone` (`backend/app/pipeline/clone/clone.py`) accepts public GitHub HTTPS URLs only (`https://github.com/<owner>/<repo>`, `.git` optional) and rejects every other scheme, host, credential, port, query string, fragment, leading `-` or whitespace-bearing URL with `CloneError("invalid_url")`. Local `file://` clones exist only in the test-only helper in `backend/tests/pipeline/test_clone.py`.
 - `frontend-redesign` has two commits that are not merged into `phase1`: `0df4d61 feat : done cloning process` and `f041b99 feat : Delete the repo content after final block` (clone cleanup work).
 
@@ -1060,11 +1069,11 @@ Run the API (from `backend/`, venv active):
 uvicorn app.main:app --reload        # serves http://127.0.0.1:8000
 curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
 ```
-Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `indexing`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout`, `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2 routes are live under `/repos/{repo_id}/index` (`POST` 202 `{"status":"queued","message":"Indexing queued."}`, 409 when already running; `GET .../status` 200; `GET .../summary` 200 only when ready, otherwise 409/500 for invalid stored data). The Part 3–4 routes (plan, reader, context, query, agent/trace, evals) remain registered stubs returning `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. To see verification/reset links locally, leave `SMTP_HOST` empty in `.env`: the messages are logged to the server console with their `http://localhost:3000/...?token=...` links.
+Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `indexing`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout` (optional `refresh_token` body revokes that token server-side), `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2 routes are live under `/repos/{repo_id}/index` (`POST` 202 `{"status":"queued","message":"Indexing queued."}`, 409 when already running; `GET .../status` 200; `GET .../summary` 200 only when ready, otherwise 409/500 for invalid stored data). The Part 3–4 routes (plan, reader, context, query, agent/trace, evals) remain registered stubs returning `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. To see verification/reset links locally, leave `SMTP_HOST` empty in `.env`: the messages are logged to the server console with their `http://localhost:3000/...?token=...` links.
 
 Run the tests (from `backend/`, venv active):
 ```bash
-python -m pytest tests/ -q                  # 266 passing (auth/repos/stubs + pipeline)
+python -m pytest tests/ -q                  # 271 passing (auth/repos/stubs + pipeline)
 python -m pytest tests/test_security.py -q  # 18
 python -m pytest tests/test_auth.py -q      # 37
 python -m pytest tests/test_repos.py -q     # 19
@@ -1100,7 +1109,7 @@ Start the backend first (from `backend/`, venv active) with `uvicorn app.main:ap
 - **Layer 7, `app/main.py`:** the app factory exists and now includes all routers (auth, repos, and the Part 2–4 stubs) — replace stub routers with real ones and extend middleware as features are built.
 - **Layer 7, `app/security/`:** helpers exist and are tested — extend them (e.g. token rehash checks) as auth needs grow.
 - **Layer 7, `app/schemas/`:** schemas for Part 1 exist (plus `stub.py`) — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`/`docs/openapi.json`/`docs/postman_collection.json`) when endpoints change.
-- **Layer 7, `app/features/auth/`:** the full Part 1 auth surface (signup/verify/resend/login/refresh/logout/forgot/reset/change/delete/me) plus rate limiting is built; `get_current_user` is reused by the repos feature and every repo-scoped stub.
+- **Layer 7, `app/features/auth/`:** the full Part 1 auth surface (signup/verify/resend/login/refresh/logout/forgot/reset/change/delete/me) plus rate limiting is built; refresh tokens are stored as SHA-256 hashes and revoked on logout, password change and account deletion; `get_current_user` is reused by the repos feature and every repo-scoped stub.
 - **Layer 7, `app/core/ratelimit.py`:** limits exist for the abuse-prone auth endpoints — add them to other sensitive endpoints and consider a shared storage (Redis) for multi-process deploys.
 - **Layer 7, `app/features/repos/`:** repo CRUD plus `get_owned_repo` are built; Part 2 flips `status` through the pipeline instead of leaving it at `"added"`.
 - **Layer 7, stub routers:** `app/features/{indexing,plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 2–4 (they already enforce ownership).
