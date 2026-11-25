@@ -72,6 +72,7 @@ class RepoOut(BaseModel):
     name: str
     status: str
     commit_sha: str | None = None
+    error_message: str | None = None
     created_at: datetime
 
 
