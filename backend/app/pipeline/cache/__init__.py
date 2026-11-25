@@ -30,14 +30,16 @@ def summary_commit_sha(repo: "Repo") -> str | None:
 
 
 def is_index_current(repo: "Repo") -> bool:
-    """True when a ready repo already has a summary for its exact commit SHA.
+    """True when an unchanged repo already has a summary for its exact commit SHA.
 
-    ``commit_sha`` is written right after a successful clone, so it is not enough
-    on its own: a failed indexing run can leave a SHA behind without a usable
-    summary. Both the SHA match and a stored summary are required.
+    The start endpoint writes ``queued`` before scheduling the task, so both
+    ``ready`` (direct task calls) and ``queued`` (the HTTP path) are valid
+    preconditions. ``commit_sha`` alone is still not enough: a failed indexing
+    run can leave a SHA behind without a usable summary. The SHA match and a
+    stored summary are both required.
     """
     return (
-        repo.status == "ready"
+        repo.status in {"ready", "queued"}
         and bool(repo.commit_sha)
         and summary_commit_sha(repo) == repo.commit_sha
     )

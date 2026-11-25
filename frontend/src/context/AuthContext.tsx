@@ -31,12 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [status, setStatus] = useState<AuthStatus>('loading')
 
-  const refresh = useCallback(async () => {
-    if (!getAccessToken()) {
-      setUser(null)
-      setStatus('anonymous')
-      return
-    }
+  const loadUser = useCallback(async () => {
     try {
       const me = await authApi.me()
       setUser(me)
@@ -48,9 +43,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refresh = useCallback(async () => {
+    if (!getAccessToken()) {
+      setUser(null)
+      setStatus('anonymous')
+      return
+    }
+    await loadUser()
+  }, [loadUser])
+
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    if (!getAccessToken()) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const me = await authApi.me()
+        if (!cancelled) {
+          setUser(me)
+          setStatus('authenticated')
+        }
+      } catch {
+        if (!cancelled) {
+          clearTokens()
+          setUser(null)
+          setStatus('anonymous')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const login = useCallback(async (email: string, password: string) => {
     const tokens = await authApi.login({ email, password })
@@ -72,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await authApi.logout()
     } catch {
-      // The endpoint is a no-op; clearing local tokens is what matters.
+      // The server may be unreachable; clearing local tokens still ends the session.
     }
     clearTokens()
     setUser(null)

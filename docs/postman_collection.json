@@ -294,15 +294,15 @@
                 "method": "POST",
                 "body": {}
               },
-              "status": "Not Implemented",
-              "code": 501,
+              "status": "Accepted",
+              "code": 202,
               "header": [
                 {
                   "key": "Content-Type",
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"key_0\": \"<string>\",\n  \"key_1\": \"<string>\"\n}",
+              "body": "{\n  \"status\": \"queued\",\n  \"message\": \"Indexing queued.\"\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -463,15 +463,15 @@
                 "method": "GET",
                 "body": {}
               },
-              "status": "Not Implemented",
-              "code": 501,
+              "status": "OK",
+              "code": 200,
               "header": [
                 {
                   "key": "Content-Type",
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"key_0\": \"<string>\"\n}",
+              "body": "{\n  \"status\": \"<status>\",\n  \"commit_sha\": \"<sha>\",\n  \"error_message\": null\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }
@@ -632,15 +632,15 @@
                 "method": "GET",
                 "body": {}
               },
-              "status": "Not Implemented",
-              "code": 501,
+              "status": "OK",
+              "code": 200,
               "header": [
                 {
                   "key": "Content-Type",
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"key_0\": \"<string>\"\n}",
+              "body": "{\n  \"commit_sha\": \"<sha>\",\n  \"file_tree\": [\n    \"<path>\"\n  ],\n  \"symbol_counts\": {\n    \"<kind>\": 0\n  },\n  \"total_symbols\": 0,\n  \"modules\": [\n    \"<module>\"\n  ],\n  \"entry_points\": [\n    \"<entry_point>\"\n  ],\n  \"symbols\": [\n    {\n      \"name\": \"<symbol>\",\n      \"kind\": \"<kind>\",\n      \"file\": \"<path>\",\n      \"line_start\": 0,\n      \"line_end\": 0,\n      \"signature\": null,\n      \"docstring\": null,\n      \"parent\": null\n    }\n  ],\n  \"files_indexed\": 0,\n  \"files_parsed\": 0,\n  \"files_cached\": 0,\n  \"files_skipped\": [\n    \"<path>\"\n  ],\n  \"graph_node_count\": 0,\n  \"graph_edge_count\": 0,\n  \"lines_of_code\": 0,\n  \"index_seconds\": 0.0,\n  \"seconds_per_10k_loc\": 0.0\n}",
               "cookie": [],
               "_postman_previewlanguage": "json"
             }

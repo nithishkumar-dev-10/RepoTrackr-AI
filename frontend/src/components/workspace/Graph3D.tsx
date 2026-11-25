@@ -1,7 +1,13 @@
 import { Line, OrbitControls, Html } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Bloom, EffectComposer } from '@react-three/postprocessing'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import type { Mesh, MeshBasicMaterial } from 'three'
 import * as THREE from 'three'
 import type { Line2 } from 'three-stdlib'
@@ -14,6 +20,18 @@ const STATUS_COLOR: Record<PlanItemStatus, string> = {
   partial: '#F59E0B',
   missing: '#EF4444',
   unknown: '#94A3B8',
+}
+
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+
+function subscribeReducedMotion(onChange: () => void) {
+  const mq = window.matchMedia(REDUCED_MOTION_QUERY)
+  mq.addEventListener('change', onChange)
+  return () => mq.removeEventListener('change', onChange)
+}
+
+function reducedMotionSnapshot() {
+  return window.matchMedia(REDUCED_MOTION_QUERY).matches
 }
 
 function CameraRig({ path, enabled }: { path: PositionedNode[]; enabled: boolean }) {
@@ -188,11 +206,11 @@ function Scene({
   nodeStatus?: Map<string, PlanItemStatus>
   readingOrder?: string[]
 }) {
-  const [reduced, setReduced] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    setReduced(mq.matches)
-  }, [])
+  const reduced = useSyncExternalStore(
+    subscribeReducedMotion,
+    reducedMotionSnapshot,
+    () => false,
+  )
 
   const byId = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes])
   const dimming = Boolean(highlightIds && highlightIds.size > 0)

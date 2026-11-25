@@ -25,27 +25,42 @@ export function deleteRepo(repoId: number): Promise<MessageResponse> {
 }
 
 /**
- * Map the backend's free-form `status` string to the three UI states.
- * Backend stores "added" on creation; "indexing"/"indexed"/"error" are
- * reserved for the indexing pipeline, so anything unknown reads as not indexed.
+ * Map the backend's free-form `status` string to the UI chip state.
+ * The indexing task writes queued/cloning/indexing/ready/failed; the older
+ * indexed/error values are accepted for existing rows.
  */
 export function mapRepoStatus(status: string): UiRepoStatus {
   switch (status) {
+    case 'ready':
     case 'indexed':
       return 'ready'
+    case 'queued':
+      return 'queued'
+    case 'cloning':
+      return 'cloning'
     case 'indexing':
       return 'indexing'
+    case 'failed':
     case 'error':
-      return 'error'
+      return 'failed'
     default:
       return 'not_indexed'
   }
 }
 
+/** Statuses that need an active 2–3 second poll. */
+export const ACTIVE_REPO_STATUSES = new Set(['queued', 'cloning', 'indexing'])
+
+export function isRepoStatusActive(status: string): boolean {
+  return ACTIVE_REPO_STATUSES.has(status)
+}
+
 /** Human labels for the status chip. */
 export const REPO_STATUS_LABEL: Record<UiRepoStatus, string> = {
   not_indexed: 'Not indexed',
+  queued: 'Queued',
+  cloning: 'Cloning',
   indexing: 'Indexing',
   ready: 'Ready',
-  error: 'Error',
+  failed: 'Failed',
 }
