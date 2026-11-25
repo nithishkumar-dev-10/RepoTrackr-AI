@@ -65,7 +65,7 @@ export function ReaderPanel({
         </p>
         {demo ? (
           <Badge variant="outline" className="font-mono">
-            Demo data
+            Not implemented yet
           </Badge>
         ) : null}
       </div>

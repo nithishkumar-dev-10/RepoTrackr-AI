@@ -286,6 +286,33 @@ def test_refresh_expired_token_unauthorized(client, sent_emails, monkeypatch):
     assert response.status_code == 401
 
 
+def test_refresh_keeps_stored_token_valid(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    first = _login(client).json()
+
+    rotated = client.post(
+        "/auth/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+
+    assert rotated.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": rotated.json()["refresh_token"]}
+        ).status_code
+        == 200
+    )
+
+
+def test_refresh_rejects_valid_untracked_refresh_token(client, sent_emails, db_session):
+    _signup_and_verify(client, sent_emails)
+    user = db_session.scalar(select(User).where(User.email == EMAIL))
+    untracked = create_refresh_token(user.id)
+
+    response = client.post("/auth/refresh", json={"refresh_token": untracked})
+
+    assert response.status_code == 401
+
+
 # --- logout ---
 
 
@@ -302,6 +329,25 @@ def test_logout_without_auth_unauthorized(client):
     response = client.post("/auth/logout")
 
     assert response.status_code == 401
+
+
+def test_logout_revokes_refresh_token(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    tokens = _login(client).json()
+
+    response = client.post(
+        "/auth/logout",
+        json={"refresh_token": tokens["refresh_token"]},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 401
+    )
 
 
 # --- forgot-password ---
@@ -358,6 +404,8 @@ def test_reset_password_used_token_rejected(client, sent_emails, sent_reset_emai
     )
 
     assert response.status_code == 400
+    assert _login(client, password="newsecret123").status_code == 200
+    assert _login(client, password="another123").status_code == 401
 
 
 def test_reset_password_expired_token_rejected(

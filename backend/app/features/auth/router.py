@@ -9,7 +9,7 @@ from fastapi import (
     Request,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,11 +19,13 @@ from app.core.email import send_reset_email, send_verification_email
 from app.core.ratelimit import limiter
 from app.features.auth.dependencies import get_current_user
 from app.models.email_token import EmailToken, EmailTokenType
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    LogoutRequest,
     RefreshRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
@@ -77,11 +79,64 @@ def _create_email_token(db: Session, user: User, token_type: EmailTokenType) -> 
     return raw_token
 
 
-def _issue_tokens(user: User) -> TokenResponse:
-    return TokenResponse(
+def _store_refresh_token(db: Session, user_id: int, raw_token: str) -> None:
+    payload = decode_token(raw_token, TokenType.REFRESH)
+    token_hash = hash_token(raw_token)
+    expires_at = datetime.fromtimestamp(int(payload["exp"]), tz=timezone.utc)
+    stored = db.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == token_hash,
+            RefreshToken.user_id == user_id,
+        )
+    )
+    if stored is None:
+        db.add(
+            RefreshToken(
+                user_id=user_id,
+                token_hash=token_hash,
+                expires_at=expires_at,
+            )
+        )
+        return
+
+    # JWTs use second-resolution iat/exp, so a new login or rotation in the
+    # same second can produce the exact same token string. Reactivate that row.
+    stored.revoked_at = None
+    stored.expires_at = expires_at
+
+
+def _active_refresh_token(
+    db: Session, user_id: int, raw_token: str
+) -> RefreshToken | None:
+    return db.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_token(raw_token),
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > datetime.now(timezone.utc),
+        )
+    )
+
+
+def _revoke_refresh_token(db: Session, raw_token: str) -> None:
+    db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.token_hash == hash_token(raw_token),
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+
+
+def _issue_tokens(db: Session, user: User) -> TokenResponse:
+    response = TokenResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
     )
+    _store_refresh_token(db, user.id, response.refresh_token)
+    db.commit()
+    return response
 
 
 def _invalidate_active_tokens(
@@ -206,7 +261,7 @@ def login(
             "Email not verified. Please verify your email before logging in.",
         )
 
-    return _issue_tokens(user)
+    return _issue_tokens(db, user)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -225,11 +280,30 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResp
             status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token"
         )
 
-    return _issue_tokens(user)
+    stored = _active_refresh_token(db, user_id, payload.refresh_token)
+    if stored is None:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token"
+        )
+
+    _revoke_refresh_token(db, payload.refresh_token)
+    return _issue_tokens(db, user)
 
 
 @router.post("/logout", response_model=MessageResponse)
-def logout(current_user: User = Depends(get_current_user)) -> MessageResponse:
+def logout(
+    payload: LogoutRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    if payload is not None and payload.refresh_token:
+        stored = _active_refresh_token(
+            db, current_user.id, payload.refresh_token
+        )
+        if stored is not None:
+            _revoke_refresh_token(db, payload.refresh_token)
+            db.commit()
+
     return MessageResponse(message="Logged out.")
 
 
@@ -257,25 +331,43 @@ def forgot_password(
 def reset_password(
     payload: ResetPasswordRequest, db: Session = Depends(get_db)
 ) -> MessageResponse:
-    token = db.scalar(
-        select(EmailToken).where(
-            EmailToken.token_hash == hash_token(payload.token),
+    token_hash = hash_token(payload.token)
+    user_id = db.scalar(
+        select(EmailToken.user_id).where(
+            EmailToken.token_hash == token_hash,
             EmailToken.type == EmailTokenType.RESET,
         )
     )
-    user = None if token is None else db.get(User, token.user_id)
-    if (
-        token is None
-        or user is None
-        or is_used(token.used_at)
-        or is_expired(token.expires_at)
-    ):
+    if user_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
+        )
+
+    now = datetime.now(timezone.utc)
+    result = db.execute(
+        update(EmailToken)
+        .where(
+            EmailToken.token_hash == token_hash,
+            EmailToken.type == EmailTokenType.RESET,
+            EmailToken.used_at.is_(None),
+            EmailToken.expires_at > now,
+        )
+        .values(used_at=now)
+    )
+    if result.rowcount != 1:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
+        )
+
+    user = db.get(User, user_id)
+    if user is None:
+        db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
         )
 
     user.password_hash = hash_password(payload.new_password)
-    token.used_at = datetime.now(timezone.utc)
     db.commit()
 
     return MessageResponse(message="Password has been reset. You can now log in.")

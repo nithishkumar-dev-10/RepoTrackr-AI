@@ -5,22 +5,22 @@ import {
   mockPlanResponse,
   mockReaderResponse,
   mockResponseForIntent,
-  nextMockIndexStatus,
 } from '@/mock'
 import type {
   Graph,
-  IndexStatus,
+  IndexRunStatus,
+  IndexStartOut,
+  IndexSummary,
   QueryIntent,
   QueryMode,
   QueryResponse,
 } from '@/types'
 
 /**
- * The single boundary for endpoints the backend still returns 501 for
- * (index, index status/summary, plan, reader, context, query, agent trace,
- * evals). Every call hits the real FastAPI route first; on 501 (or any
- * failure that is not an auth error) it falls back to typed mock data.
- * `demo: true` means the value is mock data and the UI shows a "Demo data" badge.
+ * The boundary for endpoints the backend still returns 501 for (plan, reader,
+ * context, query, agent trace, evals). Those calls hit the real FastAPI route
+ * first and fall back to typed mock data, with `demo: true` so the UI labels it.
+ * The Part 2 index endpoints are live and never fall back to mock data.
  *
  * Static analysis decides what is true. AI only retrieves and explains.
  */
@@ -72,28 +72,19 @@ export function demoGraph(): Graph {
   return mockGraph
 }
 
-/** POST /repos/{id}/index */
-export function startIndex(repoId: number): Promise<DemoData<StatusOnly>> {
-  return withFallback(
-    () => request<StatusOnly>(`/repos/${repoId}/index`, { method: 'POST' }),
-    () => ({ status: 'not_implemented' }),
-  )
+/** POST /repos/{id}/index — real 202 response, or 409 while already running. */
+export function startIndex(repoId: number): Promise<IndexStartOut> {
+  return request<IndexStartOut>(`/repos/${repoId}/index`, { method: 'POST' })
 }
 
-/** GET /repos/{id}/index/status */
-export function getIndexStatus(repoId: number): Promise<DemoData<IndexStatus>> {
-  return withFallback(
-    () => request<IndexStatus>(`/repos/${repoId}/index/status`),
-    () => nextMockIndexStatus(),
-  )
+/** GET /repos/{id}/index/status — real durable status from the Repo row. */
+export function getIndexStatus(repoId: number): Promise<IndexRunStatus> {
+  return request<IndexRunStatus>(`/repos/${repoId}/index/status`)
 }
 
-/** GET /repos/{id}/index/summary */
-export function getIndexSummary(repoId: number): Promise<DemoData<StatusOnly>> {
-  return withFallback(
-    () => request<StatusOnly>(`/repos/${repoId}/index/summary`),
-    () => ({ status: 'not_implemented' }),
-  )
+/** GET /repos/{id}/index/summary — real IndexSummaryOut, 409 before ready. */
+export function getIndexSummary(repoId: number): Promise<IndexSummary> {
+  return request<IndexSummary>(`/repos/${repoId}/index/summary`)
 }
 
 /** GET /repos/{id}/reader */

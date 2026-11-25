@@ -203,6 +203,38 @@ def test_cache_hit_skips_clone_and_reparse(
     assert cached.index_summary == {"commit_sha": "same-sha", "symbols": []}
 
 
+def test_reindex_through_endpoint_uses_cache(
+    client, sent_emails, db_session, monkeypatch, caplog
+):
+    caplog.set_level("INFO", logger="app")
+    headers = _auth_headers(client, sent_emails, "owner@example.com")
+    repo_id = _create_repo(client, headers, "https://github.com/example/cached-http")
+    repo = db_session.scalar(select(Repo).where(Repo.id == repo_id))
+    repo.status = "ready"
+    repo.commit_sha = "cached-sha"
+    repo.index_summary = {"commit_sha": "cached-sha", "symbols": []}
+    db_session.commit()
+
+    calls: list[str] = []
+
+    def unexpected_clone(url, config):
+        calls.append(url)
+        raise AssertionError("cache hit must not clone")
+
+    monkeypatch.setattr("app.tasks.clone_workspace", unexpected_clone)
+
+    started = client.post(f"/repos/{repo_id}/index", headers=headers)
+
+    assert started.status_code == 202
+    assert started.json()["status"] == "queued"
+    status_response = client.get(f"/repos/{repo_id}/index/status", headers=headers)
+    assert status_response.json()["status"] == "ready"
+    assert status_response.json()["commit_sha"] == "cached-sha"
+    assert calls == []
+    assert "Index cache hit for repo" in caplog.text
+    assert "cached-sha" in caplog.text
+
+
 def test_summary_returns_conflict_before_ready(client, sent_emails):
     headers = _auth_headers(client, sent_emails, "owner@example.com")
     repo_id = _create_repo(client, headers, "https://github.com/example/waiting")

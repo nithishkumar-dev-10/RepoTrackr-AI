@@ -101,15 +101,15 @@ Notes:
 
 ---
 
-## Part 2 — Pipeline (not_implemented)
+## Part 2 — Pipeline (live)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`. These routes are registered now. Each requires `Authorization: Bearer <access_token>` (401 without it) and verifies the repo belongs to the caller first, so a foreign or missing repo returns the same 404 `"Repo not found"` as the live repo routes.
+Each route requires `Authorization: Bearer <access_token>` (401 without it) and verifies the repo belongs to the caller first, so a foreign or missing repo returns the same 404 `"Repo not found"` as the live repo routes. `repo_id` path validation failures return 422. `status` moves through `queued`, `cloning`, `indexing`, `ready` and `failed`; `error_message` is the last failure text or null.
 
-| Method | Path | Auth | Request | Success (stub) | Errors |
-|---|---|---|---|---|---|
-| POST | `/repos/{repo_id}/index` | yes | — | 501 `{"status": "not_implemented"}` | 401, 404 |
-| GET | `/repos/{repo_id}/index/status` | yes | — | 501 | 401, 404 |
-| GET | `/repos/{repo_id}/index/summary` | yes | — | 501 | 401, 404 |
+| Method | Path | Request | Success | Errors |
+|---|---|---|---|---|
+| POST | `/repos/{repo_id}/index` | — | 202 `{"status": "queued", "message": "Indexing queued."}`; the clone/parse run continues as a background task | 401, 404, 409 `{"detail": "Indexing is already <status> for this repo."}` when already `queued`/`cloning`/`indexing`, 422 |
+| GET | `/repos/{repo_id}/index/status` | — | 200 `{"status": "...", "commit_sha": null or str, "error_message": null or str}` | 401, 404, 422 |
+| GET | `/repos/{repo_id}/index/summary` | — | 200 `IndexSummaryOut`: `commit_sha`, `file_tree`, `symbol_counts`, `total_symbols`, `modules`, `entry_points`, `symbols` (`name`, `kind`, `file`, `line_start`, `line_end`, optional `signature`, `docstring`, `parent`), `files_indexed`, `files_parsed`, `files_cached`, `files_skipped`, `graph_node_count`, `graph_edge_count`, `lines_of_code`, `index_seconds`, `seconds_per_10k_loc` | 401, 404, 409 `{"detail": "Index is not ready."}`, 500 `{"detail": "Stored index summary is invalid."}`, 422 |
 
 ---
 

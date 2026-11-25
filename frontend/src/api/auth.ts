@@ -1,4 +1,5 @@
 import { request } from '@/api/client'
+import { getRefreshToken } from '@/lib/tokenStorage'
 import type {
   ChangePasswordRequest,
   ForgotPasswordRequest,
@@ -62,9 +63,12 @@ export function me(): Promise<User> {
   return request<User>('/auth/me')
 }
 
-/** POST /auth/logout — server-side no-op; the client clears tokens. */
+/** POST /auth/logout — revokes the refresh token, then the client clears tokens. */
 export function logout(): Promise<MessageResponse> {
-  return request<MessageResponse>('/auth/logout', { method: 'POST' })
+  return request<MessageResponse>('/auth/logout', {
+    method: 'POST',
+    body: { refresh_token: getRefreshToken() },
+  })
 }
 
 /** POST /auth/forgot-password — always returns a generic message. */

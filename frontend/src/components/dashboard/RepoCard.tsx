@@ -6,7 +6,11 @@ import { MiniGraphThumb } from '@/components/dashboard/MiniGraphThumb'
 import { SpotlightCard } from '@/components/SpotlightCard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { mapRepoStatus, REPO_STATUS_LABEL } from '@/api/repos'
+import {
+  isRepoStatusActive,
+  mapRepoStatus,
+  REPO_STATUS_LABEL,
+} from '@/api/repos'
 import { cn } from '@/lib/utils'
 import type { Repo, UiRepoStatus } from '@/types'
 
@@ -19,6 +23,16 @@ const STATUS_STYLE: Record<
     dot: 'bg-status-unknown',
     glow: 'rgba(148,163,184,0.5)',
   },
+  queued: {
+    chip: 'border-transparent bg-status-partial/15 text-status-partial',
+    dot: 'bg-status-partial',
+    glow: 'rgba(245,158,11,0.55)',
+  },
+  cloning: {
+    chip: 'border-transparent bg-status-partial/15 text-status-partial',
+    dot: 'bg-status-partial',
+    glow: 'rgba(245,158,11,0.55)',
+  },
   indexing: {
     chip: 'border-transparent bg-status-partial/15 text-status-partial',
     dot: 'bg-status-partial',
@@ -29,7 +43,7 @@ const STATUS_STYLE: Record<
     dot: 'bg-status-done',
     glow: 'rgba(22,163,74,0.5)',
   },
-  error: {
+  failed: {
     chip: 'border-transparent bg-status-missing/15 text-status-missing',
     dot: 'bg-status-missing',
     glow: 'rgba(239,68,68,0.5)',
@@ -47,8 +61,9 @@ export function RepoCard({
   onOpen: () => void
   onIndex: () => void
 }) {
-  const status = indexState === 'indexing' ? 'indexing' : mapRepoStatus(repo.status)
+  const status = mapRepoStatus(repo.status)
   const style = STATUS_STYLE[status]
+  const active = isRepoStatusActive(repo.status) || indexState === 'indexing'
 
   return (
     <motion.div
@@ -68,7 +83,7 @@ export function RepoCard({
               className={cn(
                 'pulse-dot size-1.5 rounded-full',
                 style.dot,
-                status === 'indexing' && 'animate-pulse',
+                active && 'animate-pulse',
               )}
               style={{ '--glow-soft': style.glow } as CSSProperties}
             />
@@ -98,7 +113,7 @@ export function RepoCard({
               variant="outline"
               size="sm"
               onClick={onIndex}
-              disabled={indexState === 'indexing'}
+              disabled={active}
             >
               {indexState === 'indexing' ? (
                 <Loader2 className="size-4 animate-spin" />

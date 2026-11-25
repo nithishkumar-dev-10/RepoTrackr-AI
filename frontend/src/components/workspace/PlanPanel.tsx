@@ -78,7 +78,7 @@ export function PlanPanel({
       toast({
         title:
           result.data.status === 'not_implemented'
-            ? 'Plan uploaded (Demo data)'
+            ? 'Plan uploaded (Not implemented yet)'
             : 'Plan uploaded',
         description: file.name,
         variant: 'info',
@@ -108,7 +108,7 @@ export function PlanPanel({
         </p>
         {demo ? (
           <Badge variant="outline" className="font-mono">
-            Demo data
+            Not implemented yet
           </Badge>
         ) : null}
       </div>

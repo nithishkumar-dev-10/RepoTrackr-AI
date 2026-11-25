@@ -12,6 +12,7 @@ import { WORKSPACE_MODES, type WorkspaceMode } from '@/components/workspace/Mode
 import { cn } from '@/lib/utils'
 
 const PLACEHOLDER: Record<WorkspaceMode, string> = {
+  overview: 'Start indexing to generate an overview',
   reader: 'Explain how auth works end to end',
   plan: 'Verify that the plan for refresh tokens is implemented',
   context: 'Pack context to add pagination to /repos',

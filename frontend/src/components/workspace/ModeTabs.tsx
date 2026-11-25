@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
-import { BookOpen, ListChecks, Package } from 'lucide-react'
+import { BookOpen, LayoutDashboard, ListChecks, Package } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-export type WorkspaceMode = 'reader' | 'plan' | 'context'
+export type WorkspaceMode = 'overview' | 'reader' | 'plan' | 'context'
 
 export const WORKSPACE_MODES = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'reader', label: 'Reader', icon: BookOpen },
   { id: 'plan', label: 'Plan', icon: ListChecks },
   { id: 'context', label: 'Context', icon: Package },
@@ -25,7 +26,7 @@ export function ModeTabs({
   return (
     <div
       role="tablist"
-      aria-label="Query mode"
+      aria-label="Workspace view"
       className="inline-flex items-center gap-1 rounded-xl border border-border bg-background p-1"
     >
       {WORKSPACE_MODES.map(({ id, label, icon: Icon }) => {

@@ -1,9 +1,10 @@
 import { ContextPanel } from '@/components/workspace/ContextPanel'
+import { OverviewPanel } from '@/components/workspace/OverviewPanel'
 import { PlanPanel } from '@/components/workspace/PlanPanel'
 import { ReaderPanel } from '@/components/workspace/ReaderPanel'
 import type { WorkspaceMode } from '@/components/workspace/ModeTabs'
 import type { PositionedNode } from '@/lib/graphLayout'
-import type { QueryResponse } from '@/types'
+import type { IndexRunStatus, IndexSummary, QueryResponse } from '@/types'
 
 export function ModePanel({
   mode,
@@ -17,6 +18,11 @@ export function ModePanel({
   onSelectNode,
   onSelectFile,
   onPlanUploaded,
+  indexStatus,
+  indexSummary,
+  indexSummaryLoading,
+  indexSummaryError,
+  onRetryIndex,
 }: {
   mode: WorkspaceMode
   response?: QueryResponse
@@ -29,7 +35,24 @@ export function ModePanel({
   onSelectNode?: (id: string) => void
   onSelectFile?: (file: string) => void
   onPlanUploaded?: () => void
+  indexStatus: IndexRunStatus | null
+  indexSummary: IndexSummary | null
+  indexSummaryLoading: boolean
+  indexSummaryError: string
+  onRetryIndex: () => void
 }) {
+  if (mode === 'overview') {
+    return (
+      <OverviewPanel
+        status={indexStatus}
+        summary={indexSummary}
+        loading={indexSummaryLoading}
+        error={indexSummaryError}
+        onRetry={onRetryIndex}
+      />
+    )
+  }
+
   if (mode === 'plan') {
     return (
       <PlanPanel

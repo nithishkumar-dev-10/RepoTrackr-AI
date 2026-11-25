@@ -3,8 +3,9 @@ import { Boxes, Plus, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { ApiError } from '@/api/client'
 import { startIndex } from '@/api/galaxy'
-import { listRepos } from '@/api/repos'
+import { isRepoStatusActive, listRepos } from '@/api/repos'
 import { RepoCard } from '@/components/dashboard/RepoCard'
 import { TrackRepoModal } from '@/components/dashboard/TrackRepoModal'
 import { GlowButton } from '@/components/GlowButton'
@@ -34,9 +35,7 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false)
   const [indexing, setIndexing] = useState<Set<number>>(new Set())
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
+  const fetchRepos = useCallback(async () => {
     try {
       const data = await listRepos()
       setRepos(data.repos)
@@ -44,14 +43,56 @@ export default function Dashboard() {
       setError(
         err instanceof Error ? err.message : 'Could not load your repositories.',
       )
-    } finally {
-      setLoading(false)
+    }
+  }, [])
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    await fetchRepos()
+    setLoading(false)
+  }, [fetchRepos])
+
+  // Silent refresh for badge polling; does not flash the page skeleton.
+  const refreshStatuses = useCallback(async () => {
+    try {
+      const data = await listRepos()
+      setRepos(data.repos)
+    } catch {
+      // Keep the last known statuses; the manual Refresh button shows errors.
     }
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    let cancelled = false
+    ;(async () => {
+      try {
+        const data = await listRepos()
+        if (!cancelled) setRepos(data.repos)
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Could not load your repositories.',
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Poll every 2.5s while any repo is queued/cloning/indexing; cleanup on
+  // unmount and as soon as no repo needs polling.
+  useEffect(() => {
+    if (loading || !repos.some((repo) => isRepoStatusActive(repo.status))) return
+    const timer = window.setInterval(() => {
+      void refreshStatuses()
+    }, 2500)
+    return () => window.clearInterval(timer)
+  }, [loading, repos, refreshStatuses])
 
   const name = useMemo(() => user?.email?.split('@')[0] ?? 'there', [user])
 
@@ -59,16 +100,32 @@ export default function Dashboard() {
     setIndexing((prev) => new Set(prev).add(repo.id))
     try {
       const result = await startIndex(repo.id)
+      setRepos((prev) =>
+        prev.map((item) =>
+          item.id === repo.id
+            ? { ...item, status: result.status, error_message: null }
+            : item,
+        ),
+      )
       toast({
-        title:
-          result.data.status === 'not_implemented'
-            ? 'Indexing queued (Demo data)'
-            : 'Indexing started',
+        title: 'Indexing queued',
         description: `${repo.owner}/${repo.name}`,
         variant: 'info',
       })
-    } catch {
-      toast({ title: 'Could not start indexing', variant: 'error' })
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        toast({
+          title: 'Already indexing',
+          description: err.message,
+          variant: 'info',
+        })
+      } else {
+        toast({
+          title: 'Could not start indexing',
+          description: err instanceof Error ? err.message : undefined,
+          variant: 'error',
+        })
+      }
     } finally {
       window.setTimeout(() => {
         setIndexing((prev) => {
