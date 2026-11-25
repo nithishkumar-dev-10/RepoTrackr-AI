@@ -2383,7 +2383,10 @@
           "name": "Refresh",
           "request": {
             "name": "Refresh",
-            "description": {},
+            "description": {
+              "content": "Requires a stored, active refresh token. Unknown, revoked, or expired tokens are rejected with 401. Returns a new access + refresh pair; the refresh token string can be identical when issued in the same second.",
+              "type": "text/plain"
+            },
             "url": {
               "path": [
                 "auth",
@@ -2528,7 +2531,10 @@
           "name": "Logout",
           "request": {
             "name": "Logout",
-            "description": {},
+            "description": {
+              "content": "Revokes the presented refresh token server-side when supplied; without a body it only confirms success. Requires a bearer access token.",
+              "type": "text/plain"
+            },
             "url": {
               "path": [
                 "auth",
@@ -2542,12 +2548,25 @@
             },
             "header": [
               {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
                 "key": "Accept",
                 "value": "application/json"
               }
             ],
             "method": "POST",
-            "body": {},
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"<string>\"\n}",
+              "options": {
+                "raw": {
+                  "headerFamily": "json",
+                  "language": "json"
+                }
+              }
+            },
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -2589,7 +2608,16 @@
                   }
                 ],
                 "method": "POST",
-                "body": {}
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refresh_token\": \"<string>\"\n}",
+                  "options": {
+                    "raw": {
+                      "headerFamily": "json",
+                      "language": "json"
+                    }
+                  }
+                }
               },
               "status": "OK",
               "code": 200,

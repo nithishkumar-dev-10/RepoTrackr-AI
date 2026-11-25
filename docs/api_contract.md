@@ -64,7 +64,7 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 | POST | `/auth/resend-verification` | no | `ResendVerificationRequest` | 200 `MessageResponse` | 422, 429 |
 | POST | `/auth/login` | no | `LoginRequest` | 200 `TokenResponse` | 401, 403, 422, 429 |
 | POST | `/auth/refresh` | no | `RefreshRequest` | 200 `TokenResponse` | 401, 422 |
-| POST | `/auth/logout` | yes | — | 200 `MessageResponse` | 401 |
+| POST | `/auth/logout` | yes | `LogoutRequest` (optional `refresh_token`) | 200 `MessageResponse` | 401, 422 |
 | GET | `/auth/me` | yes | — | 200 `UserOut` | 401 |
 | POST | `/auth/forgot-password` | no | `ForgotPasswordRequest` | 200 `MessageResponse` | 422, 429 |
 | POST | `/auth/reset-password` | no | `ResetPasswordRequest` | 200 `MessageResponse` | 400, 422 |
@@ -74,13 +74,13 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 Notes:
 - `POST /auth/signup` creates the user unverified and triggers a verification email. 409 if the email already exists.
 - `POST /auth/login` returns 403 while the email is unverified (use resend-verification).
-- `POST /auth/refresh` accepts only a refresh token; an access token is rejected with 401. A new access + refresh pair is returned.
-- `POST /auth/logout` is **client-side only**: there is no server-side token revocation table, so the client discards its tokens. The endpoint just confirms success.
+- `POST /auth/refresh` accepts only a refresh token; an access token, an unknown token, a revoked token, or an expired token is rejected with 401. A new access + refresh pair is returned; the token string may be identical to the one presented because JWT `iat`/`exp` have second resolution, in which case the stored row is reactivated rather than duplicated.
+- `POST /auth/logout` revokes the presented refresh token server-side when `refresh_token` is supplied; without a body it only confirms success. The client still discards its local tokens.
 - `POST /auth/forgot-password` always returns the same 200 body, whether or not the email exists (prevents account enumeration); the reset email is sent in the background so it does not leak timing.
 - `POST /auth/verify-email` and `/auth/reset-password` fail with 400 for expired, used, or invalid tokens.
 - `POST /auth/reset-password` applies the password rule to `new_password` (422 if weak).
-- `POST /auth/change-password` returns 400 if the current password is wrong, or if the new password is the same as the current one.
-- `DELETE /auth/account` deletes the user and cascades to their `email_tokens` and `repos`.
+- `POST /auth/change-password` returns 400 if the current password is wrong, or if the new password is the same as the current one. It also revokes all of the user's refresh tokens.
+- `DELETE /auth/account` revokes the user's refresh tokens, then deletes the user and cascades to their `email_tokens` and `repos`.
 - Rate limiting applies to `POST /auth/signup`, `/auth/login`, `/auth/forgot-password`, and `/auth/resend-verification`: exceeding the per-IP limit returns 429 `http_error` `"Too many requests"`. Limits are configurable via `RATE_LIMIT_*` env vars (see `.env.example`).
 
 ### Repos
@@ -152,6 +152,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`. `GET /repos/{
 | `LoginRequest` | `auth.py` | `email`, `password` |
 | `TokenResponse` | `auth.py` | `access_token`, `refresh_token`, `token_type` (`"bearer"`) |
 | `RefreshRequest` | `auth.py` | `refresh_token` |
+| `LogoutRequest` | `auth.py` | `refresh_token` (optional) |
 | `VerifyEmailRequest` | `auth.py` | `token` |
 | `ResendVerificationRequest` | `auth.py` | `email` |
 | `ForgotPasswordRequest` | `auth.py` | `email` |

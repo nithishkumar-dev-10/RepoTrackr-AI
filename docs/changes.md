@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Closeout Phase 4 - refresh-token revocation and atomic reset consumption
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/alembic/versions/c4d8e7a1b2f3_add_refresh_tokens.py` and `backend/app/models/refresh_token.py`; modified `backend/app/features/auth/router.py`, `backend/app/models/__init__.py`, `backend/app/models/user.py`, `backend/app/schemas/auth.py`, `backend/tests/test_auth.py`, `frontend/src/api/auth.ts`, `frontend/src/context/AuthContext.tsx`, `docs/api_contract.md`, `docs/openapi.json`, `docs/postman_collection.json`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Added a dedicated `refresh_tokens` table storing only the SHA-256 hash of issued refresh JWTs plus `user_id`, `expires_at` and `revoked_at`. Login and refresh record that hash; refresh now requires a stored, unrevoked, unexpired hash, revokes it, and reissues a pair (an identical same-second JWT reactivates the same row rather than creating a duplicate). Logout accepts an optional `refresh_token` body and revokes that token server-side; password change and account deletion revoke all of the user's active refresh tokens. Reset-password consumption was tightened from a preliminary select plus update to one conditional `UPDATE ... WHERE used_at IS NULL AND expires_at > now ... RETURNING user_id` with a consumed-row check, so a second use cannot succeed. The frontend logout wrapper sends the stored refresh token, and the API contract, OpenAPI, Postman and project summary were updated to match the code.
+- **New commands / env variables / endpoints / migrations:** new Alembic revision `c4d8e7a1b2f3` (`down_revision = b7c1f2a9d4e6`) creates `refresh_tokens`. `POST /auth/logout` now accepts an optional `LogoutRequest` body (`{"refresh_token": "..."}`); no new endpoints, packages or env variables. `POST /auth/refresh` behaviour changed from stateless to stored-hash validation.
+- **Verification:** focused `tests/test_auth.py` → 42 passed, 5 warnings in 3.69s. Full backend `python -m pytest -q -p no:cacheprovider` → **271 passed, 5 warnings in 15.34s**. `alembic upgrade head && alembic check` on a temporary SQLite DB reached `c4d8e7a1b2f3` and reported "No new upgrade operations detected." Frontend `npm run typecheck` passed; `npm run lint` passed with 4 warnings and 0 errors (all pre-existing); `npm run build` passed with 5551 modules in 1.15s. `docs/openapi.json` and `docs/postman_collection.json` parse as JSON. No commit or push was made.
+- **Known issues / TODOs:** Refresh is keep/reissue rather than guaranteed distinct rotation because JWT `iat`/`exp` have second resolution; the identical token reactivates its stored hash. The logout flow was not exercised in a browser this phase; it was verified through endpoint tests and the frontend wrapper. The four pre-existing lint warnings remain out of scope, there is no frontend test script, and 3D/WebGL rendering was not verified. Part 3–4 routes, Docker, evals and the AI layer are untouched.
+
+---
+
 ## Closeout Phase 3 - hook warnings, cache-hit log, Dashboard 409
 
 - **Date:** 2026-11-25
