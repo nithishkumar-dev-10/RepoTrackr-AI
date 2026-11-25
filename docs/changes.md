@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Step 2A - Part 2 backend wiring
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/alembic/versions/b7c1f2a9d4e6_add_repo_index_fields.py`, `backend/app/schemas/indexing.py`, `backend/tests/test_indexing.py`; modified `backend/app/models/repo.py`, `backend/app/schemas/repo.py`, `backend/app/features/indexing/router.py`, `backend/app/tasks/__init__.py`, `backend/app/pipeline/cache/__init__.py`, `backend/app/main.py`, `backend/tests/test_stubs.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Wired Part 2 end to end on the backend only. A new Alembic revision adds `repos.error_message` and `repos.index_summary`; the repo model and `RepoOut` expose them. `POST /repos/{repo_id}/index` now sets `queued`, rejects concurrent runs, and schedules `run_index_pipeline` with FastAPI `BackgroundTasks`. The task runs clone → AST index → graph → chunk through the existing pipeline modules, persists `commit_sha` after clone, updates status at each step, stores a JSON summary for the overview endpoint, cleans up clone folders on failure, and logs seconds per 10k lines of code. `GET .../index/status` returns status/SHA/error; `GET .../index/summary` returns real file tree, symbol counts, modules, entry points and symbols with file:line, or 409 before ready. `pipeline/cache` now implements commit-SHA hit detection; unchanged files still reuse `ChunkStore.file_cache`. Startup recovery marks repos left in `queued`/`cloning`/`indexing` as failed. Part 3–4 stubs were left alone; only their old Part 2 stub cases were removed from `test_stubs.py`.
+- **New commands / env variables / endpoints / migrations:** endpoints changed from 501 to live: `POST /repos/{repo_id}/index` (202/409), `GET /repos/{repo_id}/index/status`, `GET /repos/{repo_id}/index/summary` (200/409). New Alembic revision `b7c1f2a9d4e6` (`down_revision = 09282e667a32`). No new env vars, packages or CLI commands.
+- **Verification:** `source .venv/bin/activate && python -m pytest -q -p no:cacheprovider` → 265 passed, 5 warnings. `alembic upgrade head && alembic check` against a temporary SQLite DB → "No new upgrade operations detected." No servers started and no analyzed repository was executed.
+- **Known issues / TODOs:** Phase B is not started: frontend still uses `added`/`indexing`/`indexed`/`error` statuses and the mock fallback in `src/api/galaxy.ts`, so it cannot yet show the new `queued`/`cloning`/`indexing`/`ready`/`failed` flow or real summary. `docs/openapi.json`, `docs/api_contract.md` and Postman were not regenerated in this step. Live GitHub clone/size failures were not exercised against the network; failure paths were tested with monkeypatched clone errors.
+
+---
+
 ## Step 0 - Project kickoff files
 
 - **Date:** 2026-10-08

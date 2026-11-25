@@ -20,6 +20,7 @@ from app.features.plan.router import router as plan_router
 from app.features.reader.router import router as reader_router
 from app.features.repos.router import router as repos_router
 from app.pipeline.clone.cleanup import sweep_stale_clones
+from app.tasks import mark_stuck_repos_failed
 
 logger = logging.getLogger("app")
 
@@ -32,6 +33,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("Swept %d stale clone folder(s) on startup", removed)
     except Exception:
         logger.exception("Stale clone sweep failed on startup")
+
+    try:
+        stuck = mark_stuck_repos_failed()
+        if stuck:
+            logger.info("Marked %d stuck repo(s) as failed on startup", stuck)
+    except Exception:
+        logger.exception("Stuck repo recovery failed on startup")
     yield
 
 
