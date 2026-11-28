@@ -66,3 +66,4 @@ tmp/
 data/clones/
 data/cache/
 backend/data/
+*.db.bak
