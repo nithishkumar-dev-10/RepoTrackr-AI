@@ -579,8 +579,14 @@ It exposes the auth endpoints on an `APIRouter(prefix="/auth")`. Signup normaliz
 *What breaks without it?* Accounts can't be created, recovered, or managed, so nothing downstream can be owned by a user.
 *Think of it as:* the reception desk that checks your ID, issues your badge, hands out reprints, and shreds your file when you leave.
 
+**What is `REQUIRE_EMAIL_VERIFICATION`?**
+A boolean setting (default `true`) that keeps the whole verification flow intact while allowing local dev/demo to skip it. When false, signup creates a verified user, sends no email and adds `verification_required: false` to the 201 body so the frontend navigates to login; login never emits `email_not_verified`, `get_current_user` accepts unverified users, and verify-email/resend return 200 "disabled" messages. Startup logs the exact warning `Email verification is DISABLED (dev/demo mode)` once and refuses to start in `APP_ENV=production`/`ENV=prod`.
+*Why do we need it?* Demos and local development should not require an SMTP server, but hosting must stay secure by default.
+*What breaks without it?* Every dev session needs a real verification email, or someone weakens the code by deleting verification logic.
+*Think of it as:* a switch on the reception desk that hands out badges immediately in a rehearsal, but is locked in the production office.
+
 **What is `get_current_user`?**
-A FastAPI dependency in `features/auth/dependencies.py` that reads the `Authorization: Bearer <access_token>` header, decodes it as an access token via `decode_token`, loads the `User` by the token's subject, and returns it — raising a 401 `"Not authenticated"` for a missing, malformed, expired, wrong-type token, unknown user or unverified user.
+A FastAPI dependency in `features/auth/dependencies.py` that reads the `Authorization: Bearer <access_token>` header, decodes it as an access token via `decode_token`, loads the `User` by the token's subject, and returns it — raising a 401 `"Not authenticated"` for a missing, malformed, expired, wrong-type token, unknown user or, when `REQUIRE_EMAIL_VERIFICATION=true`, an unverified user.
 *Why do we need it?* Protected routes (`/auth/me`, `/auth/logout`, `/auth/change-password`, `/auth/account`, and later repos) need one shared, tested way to turn a header into a user.
 *What breaks without it?* Every protected endpoint would re-implement token parsing and could drift or leak different errors.
 *Think of it as:* the bouncer who checks your wristband and lets you in as the person it names.
@@ -1002,7 +1008,7 @@ Browser (frontend/)
 ## Current Status
 
 Working now (verified by the current 301-test suite; see `docs/changes.md` for step history):
-- Settings & Configuration (`app/core/config.py`, `backend/.env`, `backend/.env.example`).
+- Settings & Configuration (`app/core/config.py`, `backend/.env`, `backend/.env.example`): `REQUIRE_EMAIL_VERIFICATION` defaults to true; `APP_ENV`/`ENV` gate production startup.
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and three migrations creating `users`, `email_tokens`, `repos`, then adding `repos.commit_sha`, then adding `repos.error_message` and `repos.index_summary`.
@@ -1010,6 +1016,7 @@ Working now (verified by the current 301-test suite; see `docs/changes.md` for s
 - Auth feature (`app/features/auth/router.py`, `app/features/auth/dependencies.py`): `POST /auth/signup`, `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`, and `GET /auth/me`, mounted in `main.py`.
 - Rate limiting (`app/core/ratelimit.py`, slowapi): per-IP limits on signup, login, forgot-password, resend-verification, verify-email, refresh, reset-password, change-password and logout, configurable via `RATE_LIMIT_*`, returning 429 `http_error`; the limiter assumes a single process.
 - Auth hardening: neutral signup/login/resend/forgot responses, a dummy password hash for unknown users, random `jti` plus atomic single-use refresh consumption, revoked refresh rows never reactivated, reset/change invalidating refresh and RESET tokens, `exp` required on JWTs, unverified users blocked by `get_current_user`, validation errors without `input`/`ctx`, and no tokenized links in SMTP fallback logs.
+- `REQUIRE_EMAIL_VERIFICATION` (`app/core/config.py`): true keeps every behavior above; false makes signup create a verified user with no email and a `verification_required: false` response field, skips the `email_not_verified` login path and the verified-user guard, and makes verify-email/resend return 200 "disabled" messages. Startup logs `Email verification is DISABLED (dev/demo mode)` once and refuses to start when `APP_ENV=production`/`ENV=prod`.
 - Repo-records feature (`app/features/repos/router.py`, `dependencies.py`): `POST /repos`, `GET /repos`, `GET /repos/{repo_id}`, and `DELETE /repos/{repo_id}`, all auth-required and scoped to the current user; new repos get `status="added"`, duplicates per user (case-insensitive) return 409, and another user's or a missing repo returns the same 404.
 - Indexing endpoints (`app/features/indexing/router.py`, `app/schemas/indexing.py`, `graph_out.py`): `POST /repos/{repo_id}/index` (202, queued, 409 if already running), `GET .../index/status` (status, commit SHA, error message), `GET .../index/summary` (file tree, symbol counts, modules, entry points, symbols with `file:line`, 409 before ready) and `GET .../graph` (frontend `Graph` from the stored deterministic graph, capped with `truncated`, 409 before ready), all ownership-scoped.
 - Background pipeline (`app/tasks/__init__.py`): clone → AST index → graph → chunk in FastAPI `BackgroundTasks`, with `cloning`/`indexing`/`ready`/`failed` transitions, readable errors, clone cleanup, commit-SHA cache hit (INFO-logged and asserted in the regression test), and elapsed-seconds-per-10k-LOC logging. Startup marks repos stuck in `queued`/`cloning`/`indexing` as `failed`.
@@ -1025,8 +1032,8 @@ Working now (verified by the current 301-test suite; see `docs/changes.md` for s
 - Request/response schemas (`app/schemas/{common,auth,repo,indexing,stub}.py`) and the documented contract (`docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/postman_collection.json`).
 - Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing with a dummy hash for unknown-user login timing, JWT access/refresh with random refresh `jti`, required `exp` and type-checked `decode_token`, and verify/reset email-token helpers.
 - `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map, docs links, the N/A note for static frontend pages and a Known limitations section. `frontend/README.md` covers the Vite client's env vars, commands, API boundary and state handling.
-- Tests (`backend/tests/`): **301 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_batch1_hardening.py` 13, `test_repos.py` 19, `test_stubs.py` 20, `test_indexing.py` 10, `test_graph_endpoint.py` 5, `test_schema_defaults.py` 2, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_redaction.py` 12, `test_retrieval.py` 19.
-- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `AuthContext` starts anonymous with no token, listens for `rt:auth-invalidated` from `client.ts`, and stops auth-guarded pollers on invalidation; `tokenStorage` bumps a generation on clear so in-flight refresh writes are ignored. `npm run typecheck`, `npm run lint` (0 warnings, 0 errors) and `npm run build` pass; no frontend test script is configured. `MiniGraphThumb` and `PlanPanel` avoid render-scope mutation, and the UI variant helpers stay internal so Fast Refresh works. Part 2 routes, including `/graph`, are live; `VITE_USE_MOCKS=false` by default, and only the Part 3–4 query modes remain labelled mock data.
+- Tests (`backend/tests/`): **307 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_batch1_hardening.py` 13, `test_verification_flag.py` 6, `test_repos.py` 19, `test_stubs.py` 20, `test_indexing.py` 10, `test_graph_endpoint.py` 5, `test_schema_defaults.py` 2, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_redaction.py` 12, `test_retrieval.py` 19.
+- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `AuthContext` starts anonymous with no token, listens for `rt:auth-invalidated` from `client.ts`, and stops auth-guarded pollers on invalidation; `tokenStorage` bumps a generation on clear so in-flight refresh writes are ignored. `npm run typecheck`, `npm run lint` (0 warnings, 0 errors) and `npm run build` pass; no frontend test script is configured. `MiniGraphThumb` and `PlanPanel` avoid render-scope mutation, and the UI variant helpers stay internal so Fast Refresh works. Part 2 routes, including `/graph`, are live; `VITE_USE_MOCKS=false` by default, and only the Part 3–4 query modes remain labelled mock data. `AuthContext.signup` now returns the full `SignupResponse`; `Signup.tsx` uses `verification_required === false` to skip the "Check your email" page and navigate to login.
 
 Not built yet (current absences, not a plan):
 - Retrieval is still CLI/library-only: there is no search route (`POST .../query` is a `501` stub), and no LLM/AI layer consumes the chunks.
@@ -1060,13 +1067,13 @@ pip install -r requirements.txt        # runtime deps
 pip install -r requirements-dev.txt    # also pulls pytest + httpx for tests
 ```
 
-`requirements-dev.txt` was verified in a fresh virtual environment: installing it resolved every pinned dependency and `python -m pytest -q` reported 301 passing there as well.
+`requirements-dev.txt` was verified in a fresh virtual environment: installing it resolved every pinned dependency and `python -m pytest -q` reported 307 passing there as well.
 
 Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
 - Required: `SECRET_KEY` (no default). Generate one with:
   `python -c "import secrets; print(secrets.token_urlsafe(32))"`
-- Others (all have defaults): `APP_NAME`, `ENV`, `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `VERIFY_TOKEN_EXPIRE_HOURS`, `RESET_TOKEN_EXPIRE_MINUTES`, `RATE_LIMIT_LOGIN`, `RATE_LIMIT_SIGNUP`, `RATE_LIMIT_FORGOT_PASSWORD`, `RATE_LIMIT_RESEND_VERIFICATION`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `CLONE_ROOT` (`data/clones`), `CLONE_MAX_SIZE_MB` (200), `CLONE_TIMEOUT_SECONDS` (120), `CLONE_STALE_MAX_AGE_SECONDS` (3600).
+- Others (all have defaults): `APP_NAME`, `ENV`, `APP_ENV` (`dev`; `production`/`prod` blocks verification-off startup), `REQUIRE_EMAIL_VERIFICATION` (`true`), `DATABASE_URL`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `REFRESH_TOKEN_EXPIRE_DAYS`, `VERIFY_TOKEN_EXPIRE_HOURS`, `RESET_TOKEN_EXPIRE_MINUTES`, `RATE_LIMIT_LOGIN`, `RATE_LIMIT_SIGNUP`, `RATE_LIMIT_FORGOT_PASSWORD`, `RATE_LIMIT_RESEND_VERIFICATION`, `FRONTEND_URL`, `CORS_ORIGINS`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `CLONE_ROOT` (`data/clones`), `CLONE_MAX_SIZE_MB` (200), `CLONE_TIMEOUT_SECONDS` (120), `CLONE_STALE_MAX_AGE_SECONDS` (3600).
 
 Create/verify the database (from `backend/`):
 ```bash
@@ -1089,7 +1096,7 @@ Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system
 
 Run the tests (from `backend/`, venv active):
 ```bash
-python -m pytest tests/ -q                        # 301 passing
+python -m pytest tests/ -q                        # 307 passing
 python -m pytest tests/test_security.py -q        # 18
 python -m pytest tests/test_auth.py -q            # 42
 python -m pytest tests/test_batch1_hardening.py -q # 13
@@ -1124,7 +1131,7 @@ Start the backend first (from `backend/`, venv active) with `uvicorn app.main:ap
 
 ## Current verification
 
-- Backend (venv active, from `backend/`): `python -m pytest -q` → 301 passed, 10 warnings; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`.
+- Backend (venv active, from `backend/`): `python -m pytest -q` → 307 passed, 10 warnings; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`.
 - Real Part 2 API E2E on a temporary migrated database and clone root against `https://github.com/keleshev/schema`: verified user → login → `POST /repos` → `POST /repos/{id}/index` (202) → status → summary → graph. Pre-ready summary and graph returned 409; final status was `ready`. Summary numbers: 20 file-tree entries, 4 files indexed/cached, 216 symbols (22 class / 142 function / 52 method), 3,335 lines of code, 220 graph nodes, 266 graph edges, 4 centrality rows, 1 entry point, `index_seconds` 1.953 and `seconds_per_10k_loc` 5.856. The graph endpoint returned 220 nodes, 266 edges, 2 clusters and `truncated: false`. FastAPI's `TestClient` runs background tasks before returning the 202, so polling observed only the terminal `ready` status.
 - Frontend: `npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeds with only the pre-existing large-chunk advisory. No browser automation runner is installed; UI confirmation is manual.
 
@@ -1142,7 +1149,7 @@ Start the backend first (from `backend/`, venv active) with `uvicorn app.main:ap
 - **Layer 5, `app/pipeline/`:** clone (with cleanup and redaction), indexer, graph, chunking, BM25 retrieval and `pipeline/cache` are tested library + CLI code, now wired to `app.tasks.run_index_pipeline` and the Part 2 endpoints. Next work is additional retrieval endpoints or more languages, not basic HTTP wiring.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
 - **Layer 9:** add a real `docker/docker-compose.yml` and a Dockerfile; stand up the `evals/` harnesses.
-- **Tests:** the backend suite has 301 passing tests covering security, auth hardening, repos, stubs, indexing/graph endpoints and `tests/pipeline/*` — extend it (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, browser-level UI checks).
+- **Tests:** the backend suite has 307 passing tests covering security, auth hardening, the verification flag, repos, stubs, indexing/graph endpoints and `tests/pipeline/*` — extend it (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, browser-level UI checks).
 
 ## How To Contribute
 

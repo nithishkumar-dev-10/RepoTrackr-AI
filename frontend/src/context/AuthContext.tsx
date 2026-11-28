@@ -15,7 +15,7 @@ import {
   getAccessToken,
   setTokens,
 } from '@/lib/tokenStorage'
-import type { User } from '@/types'
+import type { SignupResponse, User } from '@/types'
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
 
@@ -23,8 +23,8 @@ interface AuthContextValue {
   user: User | null
   status: AuthStatus
   login: (email: string, password: string) => Promise<void>
-  /** Returns the backend message; never logs the user in. */
-  signup: (email: string, password: string) => Promise<string>
+  /** Returns the backend message and verification flag; never logs the user in. */
+  signup: (email: string, password: string) => Promise<SignupResponse>
   logout: () => Promise<void>
   /** Re-read the session from GET /auth/me. */
   refresh: () => Promise<void>
@@ -108,8 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signup = useCallback(async (email: string, password: string) => {
-    const res = await authApi.signup({ email, password })
-    return res.message
+    return authApi.signup({ email, password })
   }, [])
 
   const logout = useCallback(async () => {

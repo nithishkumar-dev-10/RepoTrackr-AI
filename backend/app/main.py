@@ -24,9 +24,26 @@ from app.tasks import mark_stuck_repos_failed
 
 logger = logging.getLogger("app")
 
+VERIFICATION_DISABLED_WARNING = "Email verification is DISABLED (dev/demo mode)"
+
+
+def _check_verification_mode() -> None:
+    """Warn once at startup when verification is off; block production use."""
+    settings = get_settings()
+    if settings.REQUIRE_EMAIL_VERIFICATION:
+        return
+    deployment_env = (settings.APP_ENV or settings.ENV).strip().lower()
+    if deployment_env in {"production", "prod"}:
+        raise RuntimeError(
+            "REQUIRE_EMAIL_VERIFICATION=false is not allowed when "
+            "APP_ENV=production"
+        )
+    logger.warning(VERIFICATION_DISABLED_WARNING)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    _check_verification_mode()
     try:
         removed = sweep_stale_clones(get_settings().CLONE_STALE_MAX_AGE_SECONDS)
         if removed:

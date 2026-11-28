@@ -32,7 +32,7 @@ Every error returns the same envelope (defined in `backend/app/schemas/common.py
 |---|---|---|
 | 400 | `http_error` | Bad/expired/used token or malformed request logic |
 | 401 | `http_error` | Missing/invalid credentials or token |
-| 401 | `email_not_verified` | `/auth/login` only: the password matched but the email is unverified; message stays neutral |
+| 401 | `email_not_verified` | `/auth/login` only when `REQUIRE_EMAIL_VERIFICATION=true`: the password matched but the email is unverified; message stays neutral |
 | 403 | `http_error` | Authenticated but not allowed |
 | 404 | `http_error` | Resource not found |
 | 409 | `http_error` | Conflict (duplicate email or duplicate repo) |
@@ -60,7 +60,7 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 
 | Method | Path | Auth | Request | Success | Errors |
 |---|---|---|---|---|---|
-| POST | `/auth/signup` | no | `SignupRequest` | 201 `MessageResponse` | 422, 429 |
+| POST | `/auth/signup` | no | `SignupRequest` | 201 `SignupResponse` | 422, 429 |
 | POST | `/auth/verify-email` | no | `VerifyEmailRequest` | 200 `MessageResponse` | 400, 422, 429 |
 | POST | `/auth/resend-verification` | no | `ResendVerificationRequest` | 200 `MessageResponse` | 422, 429 |
 | POST | `/auth/login` | no | `LoginRequest` | 200 `TokenResponse` | 401, 422, 429 |
@@ -73,8 +73,10 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 | DELETE | `/auth/account` | yes | — | 200 `MessageResponse` | 401 |
 
 Notes:
-- `POST /auth/signup` creates the user unverified and triggers a verification email. Duplicate emails return the same neutral 201 message and receive a fresh verification email instead of a 409.
-- `POST /auth/login` returns the same 401 and the same message for unknown email, wrong password and unverified accounts. An unverified account is distinguished only by `error.code == "email_not_verified"` (unknown/bad credentials use `http_error`); the frontend uses that code to offer resend-verification without changing the neutral response text. An unverified user's access token is also rejected with 401 `http_error` by `get_current_user`.
+- With `REQUIRE_EMAIL_VERIFICATION=true` (the default), `POST /auth/signup` creates the user unverified and triggers a verification email. Duplicate emails return the same neutral 201 message and receive a fresh verification email instead of a 409. The 201 body is `{"message": "..."}`.
+- With `REQUIRE_EMAIL_VERIFICATION=false` (dev/demo only), signup creates a verified user, sends no email, and returns `{"message": "Account created. Email verification is disabled; you can log in.", "verification_required": false}`. The frontend uses `verification_required === false` to skip the "Check your email" page and send the user to login. Duplicate signup also returns this body without sending mail.
+- `POST /auth/login` returns the same 401 and the same message for unknown email, wrong password and unverified accounts. An unverified account is distinguished only by `error.code == "email_not_verified"` (unknown/bad credentials use `http_error`); the frontend uses that code to offer resend-verification without changing the neutral response text. An unverified user's access token is also rejected with 401 `http_error` by `get_current_user`. When verification is disabled, login never returns `email_not_verified` and `get_current_user` no longer rejects users solely for being unverified.
+- `POST /auth/verify-email` and `POST /auth/resend-verification` still return 200 when verification is disabled, with `{"message": "Email verification is disabled (dev/demo mode)."}` and no token/email side effects. Startup logs `Email verification is DISABLED (dev/demo mode)` once; `APP_ENV=production` (or `ENV=prod`) with the flag false refuses to start.
 - `POST /auth/refresh` accepts only a refresh token; an access token, an unknown token, a revoked token, or an expired token is rejected with 401. Refresh JWTs carry a random `jti`; the stored row is consumed once with a conditional update, the old token can never be reused, and revoked rows are never reactivated.
 - `POST /auth/logout` revokes the presented refresh token server-side when `refresh_token` is supplied; without a body it only confirms success. The client still discards its local tokens.
 - `POST /auth/forgot-password` always returns the same 200 body, whether or not the email exists (prevents account enumeration); the reset email is sent in the background so it does not leak timing.

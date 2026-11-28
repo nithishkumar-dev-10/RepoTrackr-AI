@@ -78,7 +78,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/SignupResponse"
                 }
               }
             }
@@ -796,6 +796,54 @@
         }
       }
     },
+    "/repos/{repo_id}/graph": {
+      "get": {
+        "tags": [
+          "indexing"
+        ],
+        "summary": "Index Graph",
+        "description": "Serve the deterministic graph built by build_graph() to the workspace UI.",
+        "operationId": "index_graph_repos__repo_id__graph_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Repo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/repos/{repo_id}/plan": {
       "post": {
         "tags": [
@@ -1147,6 +1195,34 @@
         ],
         "title": "Body_upload_plan_repos__repo_id__plan_post"
       },
+      "CentralityOut": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "in_degree": {
+            "type": "integer",
+            "title": "In Degree",
+            "default": 0
+          },
+          "pagerank": {
+            "type": "number",
+            "title": "Pagerank",
+            "default": 0.0
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "module"
+        ],
+        "title": "CentralityOut"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -1178,6 +1254,180 @@
           "email"
         ],
         "title": "ForgotPasswordRequest"
+      },
+      "GraphClusterOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "GraphClusterOut"
+      },
+      "GraphEdgeOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "kind"
+        ],
+        "title": "GraphEdgeOut"
+      },
+      "GraphNodeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "file": {
+            "type": "string",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "file"
+        ],
+        "title": "GraphNodeOut",
+        "description": "A node as produced by build_graph() and persisted in the summary."
+      },
+      "GraphOut": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphViewNode"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphViewEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          },
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/GraphClusterOut"
+            },
+            "type": "array",
+            "title": "Clusters"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GraphOut"
+      },
+      "GraphViewEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "type"
+        ],
+        "title": "GraphViewEdge"
+      },
+      "GraphViewNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "cluster": {
+            "type": "string",
+            "title": "Cluster"
+          },
+          "centrality": {
+            "type": "number",
+            "title": "Centrality"
+          },
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "line": {
+            "type": "integer",
+            "title": "Line"
+          },
+          "isEntry": {
+            "type": "boolean",
+            "title": "Isentry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "cluster",
+          "centrality",
+          "file",
+          "line",
+          "isEntry"
+        ],
+        "title": "GraphViewNode",
+        "description": "Frontend GraphNode contract from frontend/src/types/graph.ts."
       },
       "HTTPValidationError": {
         "properties": {
@@ -1322,6 +1572,27 @@
             "type": "integer",
             "title": "Graph Edge Count",
             "default": 0
+          },
+          "graph_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNodeOut"
+            },
+            "type": "array",
+            "title": "Graph Nodes"
+          },
+          "graph_edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdgeOut"
+            },
+            "type": "array",
+            "title": "Graph Edges"
+          },
+          "centrality": {
+            "items": {
+              "$ref": "#/components/schemas/CentralityOut"
+            },
+            "type": "array",
+            "title": "Centrality"
           },
           "lines_of_code": {
             "type": "integer",
@@ -1613,6 +1884,31 @@
           "password"
         ],
         "title": "SignupRequest"
+      },
+      "SignupResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "verification_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "SignupResponse",
+        "description": "Message plus an optional flag, omitted when verification is required."
       },
       "StubQueryRequest": {
         "properties": {

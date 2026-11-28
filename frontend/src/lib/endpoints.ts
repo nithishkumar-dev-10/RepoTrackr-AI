@@ -14,7 +14,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     method: 'POST',
     path: '/auth/signup',
     availability: 'live',
-    description: 'Create an account; sends a verification email.',
+    description: 'Create an account; sends a verification email unless verification is disabled.',
   },
   {
     method: 'POST',
@@ -26,13 +26,13 @@ export const ENDPOINTS: EndpointSpec[] = [
     method: 'POST',
     path: '/auth/verify-email',
     availability: 'live',
-    description: 'Confirm an email from the verification token.',
+    description: 'Confirm an email from the verification token; reports when verification is disabled.',
   },
   {
     method: 'POST',
     path: '/auth/resend-verification',
     availability: 'live',
-    description: 'Re-send the verification email.',
+    description: 'Re-send the verification email; reports when verification is disabled.',
   },
   {
     method: 'POST',

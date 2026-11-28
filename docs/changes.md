@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Verification flag: dev/demo email-verification bypass
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/tests/test_verification_flag.py`; modified `backend/app/core/config.py`, `backend/.env.example`, `backend/app/schemas/auth.py`, `backend/app/features/auth/router.py`, `backend/app/features/auth/dependencies.py`, `backend/app/main.py`, `frontend/src/types/auth.ts`, `frontend/src/api/auth.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/pages/Signup.tsx`, `frontend/src/lib/endpoints.ts`, `README.md`, `docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** `REQUIRE_EMAIL_VERIFICATION` defaults to `true`, so all existing verification code, endpoints, pages and tests keep their current behavior. With the flag false, signup creates a verified user without creating an email token or sending mail and returns `verification_required: false`; the frontend reads that field and navigates to login instead of showing "Check your email". Login skips `email_not_verified`, refresh/`get_current_user` accept legacy unverified users in dev mode, and verify-email/resend still return 200 with a "verification is disabled" message. Startup logs `Email verification is DISABLED (dev/demo mode)` once and raises a clear `RuntimeError` for `APP_ENV=production`/`ENV=prod`. `APP_ENV` was added to settings so the production guard reads a typed value.
+- **New commands / env variables / endpoints / migrations:** `REQUIRE_EMAIL_VERIFICATION` (default `true`) and `APP_ENV` (default `dev`) in `backend/.env`/`.env.example`. Dev-mode lines: `APP_ENV=dev`, `ENV=dev`, `REQUIRE_EMAIL_VERIFICATION=false`. No endpoints or migrations added; signup's optional response field is omitted when verification is required.
+- **Verification:** focused `tests/test_verification_flag.py` → 6 passed; full backend `python -m pytest -q` → **307 passed, 10 warnings in 7.78s**; fresh-venv `requirements-dev.txt` suite → 307 passed; `cd frontend && npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeds with only the large-chunk advisory. `docs/openapi.json` was regenerated from the live app and now declares `SignupResponse`.
+- **Known issues / TODOs:** no browser test runner is configured, so the signup redirect was verified by typecheck/lint/build and code review, not an automated browser assertion. No secrets or `.env` values were committed or printed.
+
+---
+
 ## Audit closeout - Task 7: full verification and real Part 2 E2E
 
 - **Date:** 2026-11-28

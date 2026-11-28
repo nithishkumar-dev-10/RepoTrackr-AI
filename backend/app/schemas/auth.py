@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
+from app.schemas.common import MessageResponse
+
 PASSWORD_MIN_LENGTH = 8
 
 
@@ -25,6 +27,12 @@ class SignupRequest(BaseModel):
     @classmethod
     def _validate_password(cls, value: str) -> str:
         return validate_password_strength(value)
+
+
+class SignupResponse(MessageResponse):
+    """Message plus an optional flag, omitted when verification is required."""
+
+    verification_required: bool | None = None
 
 
 class LoginRequest(BaseModel):

@@ -13,7 +13,7 @@ from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import get_settings, verification_required
 from app.core.database import get_db
 from app.core.email import send_reset_email, send_verification_email
 from app.core.errors import EmailNotVerifiedError
@@ -31,6 +31,7 @@ from app.schemas.auth import (
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupRequest,
+    SignupResponse,
     TokenResponse,
     UserOut,
     VerifyEmailRequest,
@@ -62,6 +63,10 @@ RESEND_MESSAGE = (
 FORGOT_MESSAGE = (
     "If an account exists for that email, a password reset link has been sent."
 )
+SIGNUP_DISABLED_MESSAGE = (
+    "Account created. Email verification is disabled; you can log in."
+)
+VERIFICATION_DISABLED_MESSAGE = "Email verification is disabled (dev/demo mode)."
 
 
 def _normalize_email(email: str) -> str:
@@ -176,6 +181,13 @@ def _signup_message() -> MessageResponse:
     )
 
 
+def _signup_disabled_message() -> SignupResponse:
+    return SignupResponse(
+        message=SIGNUP_DISABLED_MESSAGE,
+        verification_required=False,
+    )
+
+
 def _send_signup_email(db: Session, user: User, email: str) -> None:
     _invalidate_active_tokens(db, user.id, EmailTokenType.VERIFY)
     raw_token = _create_email_token(db, user, EmailTokenType.VERIFY)
@@ -198,15 +210,33 @@ def _send_reset_safely(email: str, raw_token: str) -> None:
 
 
 @router.post(
-    "/signup", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
+    "/signup",
+    response_model=SignupResponse,
+    status_code=status.HTTP_201_CREATED,
+    response_model_exclude_none=True,
 )
 @limiter.limit(lambda: get_settings().RATE_LIMIT_SIGNUP)
 def signup(
     request: Request, payload: SignupRequest, db: Session = Depends(get_db)
-) -> MessageResponse:
+) -> SignupResponse:
     email = _normalize_email(payload.email)
     password_hash = hash_password(payload.password)
     existing = db.scalar(select(User).where(User.email == email))
+
+    if not verification_required():
+        if existing is None:
+            db.add(
+                User(
+                    email=email,
+                    password_hash=password_hash,
+                    is_verified=True,
+                )
+            )
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+        return _signup_disabled_message()
 
     if existing is not None:
         _send_signup_email(db, existing, email)
@@ -242,6 +272,9 @@ def verify_email(
     payload: VerifyEmailRequest,
     db: Session = Depends(get_db),
 ) -> MessageResponse:
+    if not verification_required():
+        return MessageResponse(message=VERIFICATION_DISABLED_MESSAGE)
+
     token = db.scalar(
         select(EmailToken).where(
             EmailToken.token_hash == hash_token(payload.token),
@@ -267,6 +300,9 @@ def verify_email(
 def resend_verification(
     request: Request, payload: ResendVerificationRequest, db: Session = Depends(get_db)
 ) -> MessageResponse:
+    if not verification_required():
+        return MessageResponse(message=VERIFICATION_DISABLED_MESSAGE)
+
     email = _normalize_email(payload.email)
     user = db.scalar(select(User).where(User.email == email))
     raw_token, token_hash = generate_email_token()
@@ -301,9 +337,10 @@ def login(
 
     if user is None or not password_matches:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
-    if not user.is_verified:
+    if verification_required() and not user.is_verified:
         # Same status and message as a bad login; only the code differs so the
         # UI can point to verification without revealing the account to probes.
+        # With verification disabled the check is skipped entirely.
         raise EmailNotVerifiedError()
 
     return _issue_tokens(db, user)
@@ -325,7 +362,7 @@ def refresh(
         )
 
     user = db.get(User, user_id)
-    if user is None or not user.is_verified:
+    if user is None or (verification_required() and not user.is_verified):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token"
         )

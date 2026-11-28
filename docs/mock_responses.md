@@ -26,11 +26,18 @@ Request:
 ```json
 { "email": "user@example.com", "password": "secret123" }
 ```
-Success `201`:
+Success `201` with `REQUIRE_EMAIL_VERIFICATION=true` (default):
 ```json
 { "message": "Account created. Check your email to verify your account." }
 ```
-Duplicate email returns the **same neutral 201** body and sends a fresh verification email; it never returns 409. Unknown/duplicate accounts are indistinguishable from the response.
+Success `201` with `REQUIRE_EMAIL_VERIFICATION=false` (dev/demo):
+```json
+{
+  "message": "Account created. Email verification is disabled; you can log in.",
+  "verification_required": false
+}
+```
+With verification enabled, duplicate email returns the **same neutral 201** body and sends a fresh verification email; it never returns 409. With verification disabled, duplicate email returns the disabled body and sends nothing. Unknown/duplicate accounts are indistinguishable from the response.
 Error `422` (weak password / bad email):
 ```json
 {
@@ -59,6 +66,10 @@ Success `200`:
 ```json
 { "message": "Email verified. You can now log in." }
 ```
+Success `200` when `REQUIRE_EMAIL_VERIFICATION=false` (no token is consumed):
+```json
+{ "message": "Email verification is disabled (dev/demo mode)." }
+```
 Error `400` (invalid/expired/used):
 ```json
 { "error": { "code": "http_error", "message": "Invalid or expired verification token", "details": null } }
@@ -73,6 +84,10 @@ Request:
 Success `200`:
 ```json
 { "message": "If the account exists and is unverified, a new verification email has been sent." }
+```
+Success `200` when `REQUIRE_EMAIL_VERIFICATION=false` (no email is sent):
+```json
+{ "message": "Email verification is disabled (dev/demo mode)." }
 ```
 Error `422`:
 ```json
@@ -97,11 +112,11 @@ Error `401` (unknown email or wrong password):
 ```json
 { "error": { "code": "http_error", "message": "Invalid email or password", "details": null } }
 ```
-Error `401` (existing account, correct password, email not verified — same status and message, distinct code):
+Error `401` (existing account, correct password, email not verified — only when `REQUIRE_EMAIL_VERIFICATION=true`; same status and message, distinct code):
 ```json
 { "error": { "code": "email_not_verified", "message": "Invalid email or password", "details": null } }
 ```
-The frontend maps `code == "email_not_verified"` to "Please verify your email before logging in."; no `403` is returned for this case.
+The frontend maps `code == "email_not_verified"` to "Please verify your email before logging in."; no `403` is returned for this case. With `REQUIRE_EMAIL_VERIFICATION=false`, login never returns this code.
 
 ### POST /auth/refresh
 

@@ -48,3 +48,8 @@ export interface ChangePasswordRequest {
 export interface MessageResponse {
   message: string
 }
+
+/** Signup omits `verification_required` when email verification is required. */
+export interface SignupResponse extends MessageResponse {
+  verification_required?: boolean
+}

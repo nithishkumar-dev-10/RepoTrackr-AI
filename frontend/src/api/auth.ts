@@ -8,6 +8,7 @@ import type {
   ResendVerificationRequest,
   ResetPasswordRequest,
   SignupRequest,
+  SignupResponse,
   TokenResponse,
   User,
   VerifyEmailRequest,
@@ -18,10 +19,11 @@ import type {
  * Public calls send no bearer token; session calls require one.
  */
 
-/** POST /auth/signup — creates an account and emails a verification link.
- *  Returns a message only (201); it does NOT log the user in. */
-export function signup(payload: SignupRequest): Promise<MessageResponse> {
-  return request<MessageResponse>('/auth/signup', {
+/** POST /auth/signup — creates an account. By default it emails a verification
+ *  link and does NOT log the user in. When the backend has verification
+ *  disabled, the response carries `verification_required: false`. */
+export function signup(payload: SignupRequest): Promise<SignupResponse> {
+  return request<SignupResponse>('/auth/signup', {
     method: 'POST',
     body: payload,
     auth: false,

@@ -53,8 +53,20 @@ alembic upgrade head                 # creates backend/repotrackr.db
 
 Notes:
 - `SECRET_KEY` has no default and must be set in `backend/.env`.
-- Leave `SMTP_HOST` empty to keep the dev fallback: verification/reset links are printed to the server console instead of being emailed.
+- Leave `SMTP_HOST` empty to keep the dev fallback: the console logs only the recipient and subject, never a tokenized link.
 - `alembic check` verifies the models match the latest migration.
+
+### Email verification flag
+
+`REQUIRE_EMAIL_VERIFICATION` defaults to `true` (secure by default). For local dev/demo only, put these lines in `backend/.env`:
+
+```dotenv
+APP_ENV=dev
+ENV=dev
+REQUIRE_EMAIL_VERIFICATION=false
+```
+
+Set the flag back to `true` when hosting. With the flag false, signup creates a verified user, sends no verification email, and returns `"verification_required": false`; the frontend skips the "Check your email" page and sends the user to login. Login never returns `email_not_verified`. The verify-email and resend-verification endpoints still return 200 with a clear "Email verification is disabled" message. Startup logs `Email verification is DISABLED (dev/demo mode)` once; `APP_ENV=production` (or `ENV=prod`) with the flag false refuses to start.
 
 ## Run the server
 

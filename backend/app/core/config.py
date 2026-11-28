@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "RepoTrackr AI"
     ENV: Literal["dev", "prod"] = "dev"
+    APP_ENV: str = "dev"
 
     DATABASE_URL: str = "sqlite:///./repotrackr.db"
     SECRET_KEY: str
@@ -25,6 +26,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     VERIFY_TOKEN_EXPIRE_HOURS: int = 24
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    # Secure default: keep verification on unless explicitly disabled for dev/demo.
+    REQUIRE_EMAIL_VERIFICATION: bool = True
 
     RATE_LIMIT_LOGIN: str = "5/minute"
     RATE_LIMIT_SIGNUP: str = "10/minute"
@@ -73,3 +76,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def verification_required() -> bool:
+    """Single read of the email-verification flag shared by auth and guards."""
+    return get_settings().REQUIRE_EMAIL_VERIFICATION
