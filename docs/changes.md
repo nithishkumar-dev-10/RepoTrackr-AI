@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 3: real deterministic graph endpoint
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/features/indexing/graph_out.py`, `backend/tests/test_graph_endpoint.py` and `frontend/src/lib/env.ts`, `frontend/.env.example`; modified `backend/app/schemas/indexing.py`, `backend/app/features/indexing/router.py`, `backend/app/tasks/__init__.py`, `frontend/src/types/graph.ts`, `frontend/src/api/galaxy.ts`, `frontend/src/pages/RepoWorkspace.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the indexing job now persists the full `build_graph()` output (nodes, edges, per-module centrality) in `index_summary`, because the clone folder is deleted after the job. A new `GET /repos/{repo_id}/graph` validates that stored summary and maps it to the frontend `Graph` contract in `graph_out.py`: module/class/function nodes get a cluster, normalized centrality, source line and `isEntry`, edges keep their typed `kind`, and clusters are derived from node paths. Responses are capped at 300 nodes and 1000 edges, with `truncated: true` and no dangling edges. The router prefix moved from `/repos/{repo_id}/index` to `/repos/{repo_id}` so `/graph` can live alongside `/index`, `/index/status` and `/index/summary` without changing those paths. On the client, `getGraph` calls the real endpoint by default; demo data is now opt-in via `VITE_USE_MOCKS=true` (typed through `src/lib/env.ts`, default `false`, documented in `frontend/.env.example`). `RepoWorkspace` fetches the graph separately from the repo so a 409 during indexing no longer blanks the page, and has explicit loading, error/Retry and empty states plus a capped-graph note.
+- **New commands / env variables / endpoints / migrations:** `GET /repos/{repo_id}/graph` (auth required, 404 for foreign/missing repo, 409 until `ready`, 200 `GraphOut`); frontend `VITE_USE_MOCKS` (default `false`) and `VITE_API_URL` template at `frontend/.env.example`. No migration or backend env variable changed.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q tests/test_graph_endpoint.py tests/test_indexing.py` → **15 passed**; full `cd backend && .venv/bin/python -m pytest -q` → **301 passed, 10 warnings in 7.32s**. `cd frontend && npm run typecheck` passed and `npm run lint` reported only the 4 known warnings (0 errors).
+- **Known issues / TODOs:** graph nodes are limited to the stored Python index; repos indexing to `failed` keep showing the empty graph state until reindexed. `VITE_USE_MOCKS` affects only the graph (Part 3–4 stubs keep their own fallback). Existing summaries written before this change have no `graph_nodes`, so the endpoint returns an empty graph until those repos are reindexed.
+
+---
+
 ## Audit closeout - Task 2: line-preserving secret redaction
 
 - **Date:** 2026-11-28

@@ -33,6 +33,7 @@ import { PanelErrorBoundary } from '@/components/workspace/PanelErrorBoundary'
 import { StageTimeline } from '@/components/workspace/StageTimeline'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { buildAdjacency, layoutGraph } from '@/lib/graphLayout'
 import { cn } from '@/lib/utils'
@@ -68,10 +69,13 @@ export default function RepoWorkspace() {
 
 function RepoWorkspaceView({ repoId }: { repoId: number }) {
   const { toast } = useToast()
+  const { status: authStatus } = useAuth()
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [repo, setRepo] = useState<Repo | null>(null)
   const [graph, setGraph] = useState<Graph | null>(null)
+  const [graphLoading, setGraphLoading] = useState(false)
+  const [graphError, setGraphError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -104,6 +108,25 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
     }
   }, [])
 
+  const fetchGraph = useCallback(
+    async (targetRepoId: number, alive: () => boolean = () => true) => {
+      setGraphLoading(true)
+      setGraphError('')
+      try {
+        const data = await getGraph(targetRepoId)
+        if (!alive()) return
+        setGraph(data.data)
+      } catch (err) {
+        if (!alive()) return
+        setGraph(null)
+        setGraphError(err instanceof Error ? err.message : 'Could not load the graph.')
+      } finally {
+        if (alive()) setGraphLoading(false)
+      }
+    },
+    [],
+  )
+
   const effectiveStatus = useMemo<IndexRunStatus | null>(() => {
     if (indexStatus) return indexStatus
     if (!repo) return null
@@ -128,13 +151,10 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
     let cancelled = false
     ;(async () => {
       try {
-        const [loadedRepo, loadedGraph] = await Promise.all([
-          getRepo(repoId),
-          getGraph(repoId),
-        ])
+        const loadedRepo = await getRepo(repoId)
         if (cancelled) return
         setRepo(loadedRepo)
-        setGraph(loadedGraph.data)
+        void fetchGraph(loadedRepo.id, () => !cancelled)
         if (loadedRepo.status === 'ready') void fetchSummary(loadedRepo.id)
       } catch (err) {
         if (!cancelled) {
@@ -147,13 +167,20 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
     return () => {
       cancelled = true
     }
-  }, [repoId, fetchSummary])
+  }, [repoId, fetchSummary, fetchGraph])
 
   // Real status poll: every 2.5s only while queued/cloning/indexing.
   // The interval is always cleared on unmount or on a terminal status.
   useEffect(() => {
     const status = effectiveStatus?.status ?? repo?.status
-    if (!repo || !status || !isRepoStatusActive(status)) return
+    if (
+      authStatus !== 'authenticated' ||
+      !repo ||
+      !status ||
+      !isRepoStatusActive(status)
+    ) {
+      return
+    }
 
     let stopped = false
     let timer = 0
@@ -165,7 +192,10 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
         setStatusError('')
         if (data.status === 'ready' || data.status === 'failed') {
           window.clearInterval(timer)
-          if (data.status === 'ready') void fetchSummary(repo.id)
+          if (data.status === 'ready') {
+            void fetchSummary(repo.id)
+            void fetchGraph(repo.id)
+          }
         }
       } catch (err) {
         if (!stopped) {
@@ -181,7 +211,7 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
       stopped = true
       if (timer) window.clearInterval(timer)
     }
-  }, [repo, effectiveStatus?.status, fetchSummary])
+  }, [authStatus, repo, effectiveStatus?.status, fetchSummary, fetchGraph])
 
   const layout = useMemo(() => (graph ? layoutGraph(graph) : null), [graph])
   const nodes = useMemo(() => layout?.nodes ?? [], [layout])
@@ -330,7 +360,7 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
       className="flex h-[calc(100svh-3.5rem)] flex-col overflow-hidden lg:flex-row"
     >
       <div className="relative h-[45svh] shrink-0 lg:h-auto lg:flex-1">
-        {loading ? (
+        {loading || graphLoading ? (
           <div className="grid h-full place-items-center bg-canvas text-slate-400">
             <Loader2 className="size-6 animate-spin" />
           </div>
@@ -343,19 +373,54 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
               </Button>
             </div>
           </div>
-        ) : graph ? (
-          <GraphView
-            graph={graph}
-            nodes={nodes}
-            clusters={clusters}
-            edges={edges}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            highlightIds={highlightIds}
-            nodeStatus={nodeStatus}
-            readingOrder={readingOrder}
-          />
-        ) : null}
+        ) : graphError ? (
+          <div className="grid h-full place-items-center bg-canvas p-6 text-center">
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300">{graphError}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void fetchGraph(repoId)}
+              >
+                Retry graph
+              </Button>
+            </div>
+          </div>
+        ) : graph && graph.nodes.length > 0 ? (
+          <>
+            <GraphView
+              graph={graph}
+              nodes={nodes}
+              clusters={clusters}
+              edges={edges}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              highlightIds={highlightIds}
+              nodeStatus={nodeStatus}
+              readingOrder={readingOrder}
+            />
+            {graph.truncated ? (
+              <p className="absolute right-3 top-3 rounded-lg bg-surface/90 px-2 py-1 text-xs text-muted-foreground">
+                Graph capped for display
+              </p>
+            ) : null}
+          </>
+        ) : (
+          <div className="grid h-full place-items-center bg-canvas p-6 text-center">
+            <div className="space-y-3">
+              <p className="text-sm text-slate-300">
+                No graph yet. Indexing must finish before the code graph is available.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void fetchGraph(repoId)}
+              >
+                Retry graph
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div

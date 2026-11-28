@@ -64,7 +64,8 @@ RepoTrackr-AI/
 │   │   │   │   ├── dependencies.py  # get_owned_repo: 404 unless the repo belongs to the caller
 │   │   │   │   └── router.py        # add/list/get/delete my repos (auth required)
 │   │   │   ├── plan/router.py       # Stub: POST/GET /repos/{id}/plan (501)
-│   │   │   ├── indexing/router.py   # POST /index + GET /status + GET /summary (background task)
+│   │   │   ├── indexing/router.py   # POST /index + GET /index/status + GET /index/summary + GET /graph
+│   │   │   │   └── graph_out.py     # Maps stored build_graph() output to the frontend Graph contract
 │   │   │   ├── context/router.py    # Stubs: POST /repos/{id}/context + /query (501)
 │   │   │   └── reader/router.py     # Stub: GET /repos/{id}/reader (501)
 │   │   ├── pipeline/
@@ -132,6 +133,7 @@ RepoTrackr-AI/
 │       ├── test_repos.py            # Repo CRUD endpoint tests (19)
 │       ├── test_stubs.py            # Part 3-4 stub tests, 501 / 401 / 404 (20)
 │       ├── test_indexing.py         # Index flow, status, summary, cache, ownership (10)
+│       ├── test_graph_endpoint.py   # GET /graph shape, 401/404/409, caps (5)
 │       ├── test_schema_defaults.py  # Raw-INSERT regression tests for ORM/migration defaults (2)
 │       └── pipeline/
 │           ├── __init__.py          # Test package marker
@@ -158,7 +160,7 @@ RepoTrackr-AI/
 │   ├── data/.gitkeep                # Empty — eval data
 │   └── plan_verifier/.gitkeep       # Empty — plan verification evals
 ├── frontend/                        # React + TS + Vite client (see Layer 8)
-│   ├── .env.example                 # VITE_API_URL template (a real .env is gitignored)
+│   ├── .env.example                 # VITE_API_URL + VITE_USE_MOCKS template (a real .env is gitignored)
 │   ├── index.html                   # Vite HTML entry
 │   ├── package.json                 # Scripts: dev, build, typecheck, lint
 │   ├── vite.config.ts               # Vite + Tailwind + `@` alias
@@ -170,7 +172,7 @@ RepoTrackr-AI/
 │       ├── main.tsx                 # Providers (MotionConfig/Auth/Toast/Tooltip) + root render
 │       ├── App.tsx                  # Route table (public / guest / protected)
 │       ├── index.css                # Design tokens (colors, radii, glow tokens/utilities) + Tailwind layers
-│       ├── api/                     # client.ts, auth.ts, repos.ts, galaxy.ts (Part 2 live; 501 mock fallback)
+│       ├── api/                     # client.ts, auth.ts, repos.ts, galaxy.ts (Part 2 live incl. /graph; 501 mock fallback)
 │       ├── mock/                    # Typed mock data for the 501 endpoints
 │       ├── types/                   # Wire + UI types (auth, repo, graph, query, pipeline, api)
 │       ├── lib/                     # env, tokenStorage, motion, validation, authErrors, github,
@@ -524,7 +526,7 @@ Reserved for the loop where the model calls tools over retrieved evidence.
 
 **What it is:** The folder skeleton for the FastAPI application: the app object, request/response schemas, security helpers, and the per-feature route modules.
 **Why it exists:** It is the top edge the outside world talks to; keeping endpoints grouped by feature keeps routing readable as the app grows.
-**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, rate-limit handler, startup recovery, `GET /health` and the `GET /evals` stub), `backend/app/core/email.py` (SMTP sending with a dev console fallback, and verification/reset email helpers), `backend/app/core/ratelimit.py` (the slowapi `Limiter`), `backend/app/schemas/{__init__,common,auth,repo,indexing,stub}.py` (the Pydantic request/response models), `backend/app/security/{__init__,passwords,tokens,email_tokens}.py` (password hashing, JWT, email-token helpers), `backend/app/features/auth/{__init__,dependencies,router}.py` (the complete auth feature), `backend/app/features/repos/{__init__,dependencies,router}.py` (the repo-records feature plus the shared `get_owned_repo` dependency), the live `backend/app/features/indexing/router.py`, and the Part 3–4 stub routers `backend/app/features/{plan,reader,context}/router.py` and `backend/app/agent/router.py`.
+**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, rate-limit handler, startup recovery, `GET /health` and the `GET /evals` stub), `backend/app/core/email.py` (SMTP sending with a dev console fallback, and verification/reset email helpers), `backend/app/core/ratelimit.py` (the slowapi `Limiter`), `backend/app/schemas/{__init__,common,auth,repo,indexing,stub}.py` (the Pydantic request/response models), `backend/app/security/{__init__,passwords,tokens,email_tokens}.py` (password hashing, JWT, email-token helpers), `backend/app/features/auth/{__init__,dependencies,router}.py` (the complete auth feature), `backend/app/features/repos/{__init__,dependencies,router}.py` (the repo-records feature plus the shared `get_owned_repo` dependency), the live `backend/app/features/indexing/router.py` and `graph_out.py`, and the Part 3–4 stub routers `backend/app/features/{plan,reader,context}/router.py` and `backend/app/agent/router.py`.
 **Depends on:** Layers 1–5 (config, DB, models, migrations, the deterministic pipeline); the AI layer is not used yet.
 **Used by:** the frontend and any external client.
 
@@ -617,10 +619,10 @@ Part 3's plan feature; for now a stub router (`router.py`) exposing `POST /repos
 *Think of it as:* a meeting room that is booked and labelled but has no furniture yet.
 
 **What is `features/indexing`?**
-Part 2's live indexing feature. `POST /repos/{repo_id}/index` returns 202, sets `status="queued"` and schedules `app.tasks.run_index_pipeline` with FastAPI `BackgroundTasks`; it rejects a second start while the repo is `queued`/`cloning`/`indexing`. `GET .../index/status` returns `status`, `commit_sha` and `error_message`; `GET .../index/summary` returns the persisted file tree, symbol counts, modules, entry points and symbols with `file:line`, or 409 before `ready`. All three routes use `get_owned_repo`.
-*Why do we need it?* It is the API the frontend starts and polls while the pipeline runs.
-*What breaks without it?* There is no route to start or watch indexing.
-*Think of it as:* the washing-machine button wired to the machine, with a status light and a printed result sheet.
+Part 2's live indexing feature. `POST /repos/{repo_id}/index` returns 202, sets `status="queued"` and schedules `app.tasks.run_index_pipeline` with FastAPI `BackgroundTasks`; it rejects a second start while the repo is `queued`/`cloning`/`indexing`. `GET .../index/status` returns `status`, `commit_sha` and `error_message`; `GET .../index/summary` returns the persisted file tree, symbol counts, modules, entry points and symbols with `file:line`, or 409 before `ready`. `GET .../graph` reshapes the stored `build_graph()` output into the frontend `Graph` contract (module/class/function nodes with cluster, normalized centrality, `line`, `isEntry`, and typed edges/clusters), is capped at 300 nodes and 1000 edges with `truncated: true`, and also returns 409 before `ready`. All four routes use `get_owned_repo` (401 anonymous, 404 foreign/missing repo). `app/features/indexing/graph_out.py` owns the reshaping; the deterministic builder remains the only source of truth.
+*Why do we need it?* It is the API the frontend starts, polls and draws while the pipeline runs.
+*What breaks without it?* There is no route to start or watch indexing, and the workspace would have no real code graph.
+*Think of it as:* the washing-machine button wired to the machine, with a status light, a printed result sheet and a map of the parts.
 
 **What is `features/context`?**
 Part 3's context/query feature; for now a stub router exposing `POST /repos/{repo_id}/context` and `POST /repos/{repo_id}/query` (each a JSON `StubQueryRequest` of `{query, mode}`), returning `501` after an ownership check.
@@ -710,7 +712,7 @@ JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a
 **Depends on:** Layer 7 (HTTP API) — every data call goes through `src/api/`.
 **Used by:** end users.
 
-*Built and passing `npm run typecheck`, `npm run lint` (warnings only) and `npm run build`; no frontend test script is configured. The Part 2 routes in `src/api/galaxy.ts` are live and never use fallback data: `startIndex` calls `POST /repos/{id}/index`, `getIndexStatus` calls `GET .../index/status`, and `getIndexSummary` calls `GET .../index/summary`. The dashboard and workspace badges use the backend statuses `queued`/`cloning`/`indexing`/`ready`/`failed`, poll every 2.5s while active, and stop the interval on a terminal status or unmount. The Overview tab renders the real summary only after `ready`; the graph and the three fake query modes still use `src/mock/*`, with fake-evidence badges marked "Not implemented yet".*
+*Built and passing `npm run typecheck`, `npm run lint` (warnings only) and `npm run build`; no frontend test script is configured. The Part 2 routes in `src/api/galaxy.ts` are live and never use fallback data: `startIndex` calls `POST /repos/{id}/index`, `getIndexStatus` calls `GET .../index/status`, `getIndexSummary` calls `GET .../index/summary`, and `getGraph` calls `GET /repos/{id}/graph` unless `VITE_USE_MOCKS=true` (the opt-in demo default is `false` via `src/lib/env.ts` and `frontend/.env.example`). The dashboard and workspace badges use the backend statuses `queued`/`cloning`/`indexing`/`ready`/`failed`, poll every 2.5s while active, and stop the interval on a terminal status or unmount. The Overview tab renders the real summary only after `ready`; the workspace fetches the graph separately from the repo so a 409 while indexing does not blank the page, and shows explicit loading, error/Retry and empty states plus a "Graph capped for display" note when `truncated`. The three fake query modes still use `src/mock/*`, with fake-evidence badges marked "Not implemented yet".*
 
 *Current limitation:* Reader/Plan/Context still use local mock evidence and are labelled "Not implemented yet"; `RepoWorkspace` unwraps the `{data, demo}` result from `src/api/galaxy.ts` into the `{response, demo}` shape the panels consume, and a `PanelErrorBoundary` around the tab panel keeps any future panel crash from blanking the workspace.
 
@@ -735,7 +737,7 @@ The thin `fetch` wrapper: prefixes `VITE_API_URL`, JSON-encodes bodies, attaches
 *Think of it as:* the single reception line every request goes through before reaching the API.
 
 **What is `src/api/galaxy.ts`?**
-The API boundary. The Part 2 functions (`startIndex`, `getIndexStatus`, `getIndexSummary`) call the real routes directly and surface errors. For the endpoints the backend still returns `501` for (`plan`, `reader`, `context`, `query`, `agent/trace`, `evals`) it calls the real route first and, on failure that is not a `401`/`403`, returns typed mock data with `demo: true`; auth errors are rethrown. The catch is broad, so non-`401`/`403` failures of any kind (network, `500`) also become demo data. `getGraph` is always demo (no graph route exists yet).
+The API boundary. The Part 2 functions (`startIndex`, `getIndexStatus`, `getIndexSummary`, `getGraph`) call the real routes directly and surface errors; `getGraph` returns demo data only when `VITE_USE_MOCKS=true`, otherwise it calls `GET /repos/{id}/graph`. For the endpoints the backend still returns `501` for (`plan`, `reader`, `context`, `query`, `agent/trace`, `evals`) it calls the real route first and, on failure that is not a `401`/`403`, returns typed mock data with `demo: true`; auth errors are rethrown. The catch is broad, so non-`401`/`403` failures of any kind (network, `500`) also become demo data.
 *Why do we need it?* The workspace can show real Part 2 data now and still carry labelled placeholders for the unimplemented query modes.
 *What breaks without it?* The workspace would show errors everywhere until Parts 3–4 land.
 *Think of it as:* a placeholder actor who steps in only when the lead hasn't arrived, with a sign saying so.
@@ -920,7 +922,7 @@ The index endpoint starts a durable job and returns immediately:
 
 1. **Start (Layer 7).** `POST /repos/{repo_id}/index` depends on `get_owned_repo` (401 without a token, 404 for a foreign/missing repo), rejects a repo already `queued`/`cloning`/`indexing` with 409, sets `status="queued"`, clears `error_message`, and adds `app.tasks.run_index_pipeline(repo.id)` to FastAPI `BackgroundTasks`.
 2. **Task (Layer 5 + 7).** `run_index_pipeline` opens its own DB session. On a commit-SHA cache hit it logs `Index cache hit for repo %d at %s` at INFO under the `app` logger and returns to `ready` without cloning. Otherwise it writes `cloning`, clones through `clone_workspace()`, stores `commit_sha`, writes `indexing`, then runs `index_repo()`, `build_graph()` and `build_chunks()`. Chunks and stored symbol docstrings/signatures pass through `redact_secrets()` first. It logs elapsed seconds per 10k Python lines, stores `index_summary`, and writes `ready`. Any exception writes `failed` with a readable `error_message` and removes the clone folder.
-3. **Poll (Layer 7).** `GET .../index/status` reads `status`, `commit_sha` and `error_message`. `GET .../index/summary` returns the stored overview only when `status == "ready"`; otherwise it is 409. Both use `get_owned_repo`.
+3. **Poll (Layer 7).** `GET .../index/status` reads `status`, `commit_sha` and `error_message`. `GET .../index/summary` returns the stored overview only when `status == "ready"`; otherwise it is 409. `GET .../graph` maps the persisted `graph_nodes`/`graph_edges`/`centrality` into the frontend `Graph` shape, caps at 300 nodes / 1000 edges with `truncated`, and is also 409 until `ready`. All three use `get_owned_repo`.
 
 ```
 Browser ──POST /repos/{id}/index──► router ──► 202 {"status":"queued"}
@@ -931,6 +933,7 @@ Browser ──POST /repos/{id}/index──► router ──► 202 {"status":"qu
                                       │  exception → failed + error_message
 Browser ──GET .../index/status────► 200 {status, commit_sha, error_message}
 Browser ──GET .../index/summary───► 200 IndexSummaryOut | 409 not ready
+Browser ──GET .../graph──────────► 200 GraphOut {nodes, edges, clusters, truncated} | 409 not ready
 ```
 
 ### Stub request flow (Parts 3–4)
@@ -977,9 +980,9 @@ The React app in `frontend/` talks to Layer 7 through `src/api/`:
 1. **Boot (main.tsx).** `main.tsx` mounts the providers and `App.tsx` picks a route. `ProtectedRoute`/`GuestRoute` (`src/components/guards.tsx`) redirect based on the session held in `AuthContext` (tokens in `localStorage` via `src/lib/tokenStorage.ts`).
 2. **Auth.** Signup/login/verify call `src/api/auth.ts` -> `src/api/client.ts` -> the real `/auth/*` routes; a successful login stores the token pair in `AuthContext` and `/auth/me` restores the session on reload.
 3. **Dashboard.** `Dashboard` calls `listRepos()` (real `GET /repos`) and renders `RepoCard`s with status chips; the track modal calls `createRepo()` (real `POST /repos`). "Index" calls `startIndex()`. While any repo is `queued`/`cloning`/`indexing`, `listRepos()` is refreshed every 2.5s; the interval is cleared when no repo is active or the page unmounts. A `409` from start shows an "Already indexing" toast. Browser verification clicked an enabled Index button after the backend row became `cloning` and confirmed that exact toast.
-4. **Workspace.** `/repo/:id` loads the repo (`getRepo`, real) and the graph (`getGraph`, always demo), then polls `getIndexStatus()` every 2.5s only while active; `ready` or `failed` clears the interval, and unmount clears it too. `StageTimeline` renders queued→cloning→indexing→ready, shows `error_message` on `failed`, and Retry calls `startIndex()` again. The status badge uses the same six states on list and detail. `RepoWorkspace` is keyed by the route id so a new repo id gets fresh state; `effectiveStatus` and `currentRepo` are derived during render, and tab queries start from the tab click rather than an effect.
+4. **Workspace.** `/repo/:id` loads the repo (`getRepo`, real) and separately fetches the graph (`getGraph`, real `GET /repos/{id}/graph` unless `VITE_USE_MOCKS=true`), so a 409 while indexing does not blank the page. It polls `getIndexStatus()` every 2.5s only while active; `ready` or `failed` clears the interval, and `ready` also reloads the graph; unmount clears it too. The graph area shows explicit loading, error/Retry and empty states and a capped note when `truncated`. `StageTimeline` renders queued→cloning→indexing→ready, shows `error_message` on `failed`, and Retry calls `startIndex()` again. The status badge uses the same six states on list and detail. `RepoWorkspace` is keyed by the route id so a new repo id gets fresh state; `effectiveStatus` and `currentRepo` are derived during render, and tab queries start from the tab click rather than an effect.
 5. **Overview.** When status is `ready`, the Overview tab calls `getIndexSummary()` (real `GET .../index/summary`) and renders the file tree, symbol counts, modules, entry points and `file:line` symbol locations. While not ready it renders no symbols; loading, empty and error states are explicit, and `409`/network errors show a Retry action.
-6. **Mock modes.** `getGraph` and the ⌘K query modes for Reader/Plan/Context still come from `src/mock/*` and are labelled "Not implemented yet"; Plan colors nodes by check status, Reader highlights the reading order and Context shows the packed tiers. These do not affect Overview.
+6. **Mock modes.** Only when `VITE_USE_MOCKS=true` does `getGraph` come from `src/mock/*` (labelled demo); the ⌘K query modes for Reader/Plan/Context always come from `src/mock/*` and are labelled "Not implemented yet". Plan colors nodes by check status, Reader highlights the reading order and Context shows the packed tiers. These do not affect Overview.
 7. **Activity.** Every call through `client.ts` is appended to the in-memory log in `src/lib/apiLog.ts`, which the Developer page displays live.
 
 ```
@@ -995,7 +998,7 @@ Browser (frontend/)
 
 ## Current Status
 
-Working now (verified by the current 296-test suite; see `docs/changes.md` for step history):
+Working now (verified by the current 301-test suite; see `docs/changes.md` for step history):
 - Settings & Configuration (`app/core/config.py`, `backend/.env`, `backend/.env.example`).
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
@@ -1005,7 +1008,7 @@ Working now (verified by the current 296-test suite; see `docs/changes.md` for s
 - Rate limiting (`app/core/ratelimit.py`, slowapi): per-IP limits on signup, login, forgot-password, resend-verification, verify-email, refresh, reset-password, change-password and logout, configurable via `RATE_LIMIT_*`, returning 429 `http_error`; the limiter assumes a single process.
 - Auth hardening: neutral signup/login/resend/forgot responses, a dummy password hash for unknown users, random `jti` plus atomic single-use refresh consumption, revoked refresh rows never reactivated, reset/change invalidating refresh and RESET tokens, `exp` required on JWTs, unverified users blocked by `get_current_user`, validation errors without `input`/`ctx`, and no tokenized links in SMTP fallback logs.
 - Repo-records feature (`app/features/repos/router.py`, `dependencies.py`): `POST /repos`, `GET /repos`, `GET /repos/{repo_id}`, and `DELETE /repos/{repo_id}`, all auth-required and scoped to the current user; new repos get `status="added"`, duplicates per user (case-insensitive) return 409, and another user's or a missing repo returns the same 404.
-- Indexing endpoints (`app/features/indexing/router.py`, `app/schemas/indexing.py`): `POST /repos/{repo_id}/index` (202, queued, 409 if already running), `GET .../index/status` (status, commit SHA, error message) and `GET .../index/summary` (file tree, symbol counts, modules, entry points, symbols with `file:line`, 409 before ready), all ownership-scoped.
+- Indexing endpoints (`app/features/indexing/router.py`, `app/schemas/indexing.py`, `graph_out.py`): `POST /repos/{repo_id}/index` (202, queued, 409 if already running), `GET .../index/status` (status, commit SHA, error message), `GET .../index/summary` (file tree, symbol counts, modules, entry points, symbols with `file:line`, 409 before ready) and `GET .../graph` (frontend `Graph` from the stored deterministic graph, capped with `truncated`, 409 before ready), all ownership-scoped.
 - Background pipeline (`app/tasks/__init__.py`): clone → AST index → graph → chunk in FastAPI `BackgroundTasks`, with `cloning`/`indexing`/`ready`/`failed` transitions, readable errors, clone cleanup, commit-SHA cache hit (INFO-logged and asserted in the regression test), and elapsed-seconds-per-10k-LOC logging. Startup marks repos stuck in `queued`/`cloning`/`indexing` as `failed`.
 - Part 3–4 stubs (`app/features/{plan,reader,context}/router.py`, `app/agent/router.py`, `GET /evals`): the remaining not-yet-implemented endpoints are registered. Repo-scoped ones verify ownership via `get_owned_repo` (401 / 404) and then return `501 {"status": "not_implemented"}`; `/evals` is public.
 - Safe clone (`app/pipeline/clone/`): `safe_clone` accepts only public GitHub HTTPS URLs, checks the remote size, shallow-clones under a timeout, records the commit SHA and returns a `CloneResult`; `clean_repo` deletes skipped directories and secret files; `redact_secrets` replaces credential-shaped values inside lines with `[REDACTED]` without changing line numbers; `CloneError` carries typed codes. Called by the indexing background task through `clone_workspace()`.
@@ -1019,8 +1022,8 @@ Working now (verified by the current 296-test suite; see `docs/changes.md` for s
 - Request/response schemas (`app/schemas/{common,auth,repo,indexing,stub}.py`) and the documented contract (`docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/postman_collection.json`).
 - Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing with a dummy hash for unknown-user login timing, JWT access/refresh with random refresh `jti`, required `exp` and type-checked `decode_token`, and verify/reset email-token helpers.
 - `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map and docs links.
-- Tests (`backend/tests/`): **296 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_batch1_hardening.py` 13, `test_repos.py` 19, `test_stubs.py` 20, `test_schema_defaults.py` 2, `test_indexing.py` 10, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_redaction.py` 12, `test_retrieval.py` 19.
-- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `AuthContext` starts anonymous with no token, listens for `rt:auth-invalidated` from `client.ts`, and stops auth-guarded pollers on invalidation; `tokenStorage` bumps a generation on clear so in-flight refresh writes are ignored. `npm run typecheck`, `npm run lint` (4 pre-existing warnings, 0 errors; no hook warnings) and `npm run build` pass; no frontend test script is configured. Part 2 routes are live; the graph and Part 3–4 query modes remain labelled mock data.
+- Tests (`backend/tests/`): **301 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_batch1_hardening.py` 13, `test_repos.py` 19, `test_stubs.py` 20, `test_indexing.py` 10, `test_graph_endpoint.py` 5, `test_schema_defaults.py` 2, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_redaction.py` 12, `test_retrieval.py` 19.
+- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `AuthContext` starts anonymous with no token, listens for `rt:auth-invalidated` from `client.ts`, and stops auth-guarded pollers on invalidation; `tokenStorage` bumps a generation on clear so in-flight refresh writes are ignored. `npm run typecheck`, `npm run lint` (4 pre-existing warnings, 0 errors; no hook warnings) and `npm run build` pass; no frontend test script is configured. Part 2 routes, including `/graph`, are live; `VITE_USE_MOCKS=false` by default, and only the Part 3–4 query modes remain labelled mock data.
 
 Not built yet (current absences, not a plan):
 - Retrieval is still CLI/library-only: there is no search route (`POST .../query` is a `501` stub), and no LLM/AI layer consumes the chunks.
@@ -1103,7 +1106,7 @@ The chunk store defaults to `backend/data/chunks.db` (gitignored; `--db` overrid
 Run the frontend (from `frontend/`, Node 20+):
 ```bash
 npm install
-cp .env.example .env        # optional; VITE_API_URL defaults to http://localhost:8000
+cp .env.example .env        # optional; VITE_API_URL defaults to http://localhost:8000, VITE_USE_MOCKS to false
 npm run dev                 # Vite dev server on http://localhost:5173
 npm run typecheck           # tsc -b --noEmit
 npm run build               # production build (3D canvas + Mermaid are code-split)

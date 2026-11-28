@@ -145,6 +145,10 @@ def _build_summary(
         "files_skipped": list(chunks.files_skipped),
         "graph_node_count": len(graph.nodes),
         "graph_edge_count": len(graph.edges),
+        # Full shape from build_graph() (builder.py), served by /repos/{id}/graph.
+        "graph_nodes": [node.model_dump() for node in graph.nodes],
+        "graph_edges": [edge.model_dump() for edge in graph.edges],
+        "centrality": [score.model_dump() for score in graph.centrality],
         "lines_of_code": lines_of_code,
         "index_seconds": round(elapsed_seconds, 3),
         "seconds_per_10k_loc": round(per_10k, 3),
