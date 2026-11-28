@@ -22,6 +22,7 @@ from app.pipeline.cache import is_index_current
 from app.pipeline.chunking.builder import build_chunks
 from app.pipeline.clone.cleanup import configured_clone_root, remove_clone
 from app.pipeline.clone.clone import _destination
+from app.pipeline.clone.redaction import redact_secrets
 from app.pipeline.clone.errors import CloneError
 from app.pipeline.clone.models import CloneConfig
 from app.pipeline.clone.cleanup import clone_workspace
@@ -126,7 +127,18 @@ def _build_summary(
             for file_index in repo_index.files
             for entry in file_index.entry_points
         ],
-        "symbols": [symbol.model_dump() for symbol in repo_index.symbols],
+        "symbols": [
+            {
+                **symbol.model_dump(),
+                "docstring": (
+                    redact_secrets(symbol.docstring) if symbol.docstring else None
+                ),
+                "signature": (
+                    redact_secrets(symbol.signature) if symbol.signature else None
+                ),
+            }
+            for symbol in repo_index.symbols
+        ],
         "files_indexed": len(repo_index.files),
         "files_parsed": chunks.files_parsed,
         "files_cached": chunks.files_cached,

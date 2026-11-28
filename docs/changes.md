@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 2: line-preserving secret redaction
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/pipeline/clone/redaction.py` and `backend/tests/pipeline/test_redaction.py`; modified `backend/app/pipeline/clone/__init__.py`, `backend/app/pipeline/chunking/builder.py`, `backend/app/tasks/__init__.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** added one reusable `redact_secrets(text) -> text` in the clone package that replaces credential-shaped values inside a line with `[REDACTED]` and emits exactly one output line per input line. It covers AWS/Google API keys, GitHub and Slack tokens, OpenAI-style keys, JWTs, PEM private-key blocks and string literals assigned to password/secret/token/api-key names, while leaving environment lookups, empty strings and documented placeholders untouched. Filename-based stripping was left as-is. The chunk builder now redacts every stored chunk (including cache hits, with token counts recomputed) and the background task redacts symbol docstrings and signatures before writing `index_summary`, so file:line citations remain correct and no stored source text carries a real key.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q tests/pipeline/test_redaction.py tests/pipeline/test_chunking.py tests/test_indexing.py` → **33 passed, 10 warnings**; full `cd backend && .venv/bin/python -m pytest -q` → **296 passed, 10 warnings in 7.04s**.
+- **Known issues / TODOs:** no inline-secret redaction runs on CLI output that is only printed, nor on exception text written to `error_message`; the function is ready for reuse before Part 3 model calls.
+
+---
+
 ## Audit closeout - Task 1: bring local database to head
 
 - **Date:** 2026-11-28
