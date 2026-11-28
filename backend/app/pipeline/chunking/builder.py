@@ -12,6 +12,7 @@ from pathlib import Path
 
 import tiktoken
 
+from app.pipeline.clone.redaction import redact_secrets
 from app.pipeline.chunking.models import MAX_TOKENS, Chunk, ChunkSet
 from app.pipeline.chunking.store import ChunkStore
 from app.pipeline.indexer.models import FileIndex, Symbol
@@ -99,7 +100,8 @@ def _file_chunks(fi: FileIndex, source: str, file_hash: str, commit_sha: str) ->
     source_lines = source.splitlines()
     chunks: list[Chunk] = []
     for symbol in fi.symbols:
-        text = _symbol_text(symbol, source_lines, fi.symbols)
+        # Redact inside each line before storing: line numbers stay citation-safe.
+        text = redact_secrets(_symbol_text(symbol, source_lines, fi.symbols))
         count = _tokens(text)
         chunks.append(
             Chunk(
@@ -118,6 +120,25 @@ def _file_chunks(fi: FileIndex, source: str, file_hash: str, commit_sha: str) ->
             )
         )
     return chunks
+
+
+def _safe_cached_chunks(cached: list[Chunk], commit_sha: str) -> list[Chunk]:
+    """Re-key cached chunks, re-applying redaction and their token counts."""
+    safe: list[Chunk] = []
+    for chunk in cached:
+        text = redact_secrets(chunk.text)
+        count = _tokens(text)
+        safe.append(
+            chunk.model_copy(
+                update={
+                    "commit_sha": commit_sha,
+                    "text": text,
+                    "token_count": count,
+                    "too_large": count > MAX_TOKENS,
+                }
+            )
+        )
+    return safe
 
 
 # -------------------------------------------------------------- build_chunks
@@ -150,7 +171,7 @@ def build_chunks(
 
         cached = store.get_cached(rel, file_hash)
         if cached is not None:
-            chunks = [c.model_copy(update={"commit_sha": commit_sha}) for c in cached]
+            chunks = _safe_cached_chunks(cached, commit_sha)
             result.files_cached += 1
         else:
             fi = parse_source(source, file_path=rel)

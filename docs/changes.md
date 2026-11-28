@@ -4,6 +4,94 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 7: full verification and real Part 2 E2E
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `docs/project_summary.md` and `docs/changes.md`; no repository files created or deleted. The E2E driver lived in the approved OS temp folder, not in the repo.
+- **What changed and why:** `docs/project_summary.md` now matches the verified current state: it documents the live `/graph` route, the redacted/dev-safe email fallback, correct per-file test counts, the fact that `safe_clone` is invoked by the HTTP background task, a Current verification section, and updated "Where You Can Help" notes (only Part 3–4 routers remain stubs; 301 tests exist). Stale claims about tokenized links in logs, 265/271 tests and missing HTTP wiring were removed.
+- **New commands / env variables / endpoints / migrations:** none added. Verification used the existing commands plus a temporary E2E driver with `DATABASE_URL`, `CLONE_ROOT`, `SMTP_HOST=""` and `PYTHONPATH` set only for that process; the temp DB was migrated from zero to `c4d8e7a1b2f3` with Alembic.
+- **Verification:** backend venv `python -m pytest -q` → **301 passed, 10 warnings in 7.35s**; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`. Frontend `npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeded (large-chunk advisory only). Real API E2E against `https://github.com/keleshev/schema` on a fresh temp DB: pre-ready `/index/summary` and `/graph` returned 409, `POST /index` returned 202, status ended `ready`; summary reported 20 file-tree entries, 4 files indexed/cached, 216 symbols, 3,335 LOC, 220 graph nodes, 266 graph edges, 4 centrality rows, `index_seconds` 1.953 and `seconds_per_10k_loc` 5.856; `/graph` returned 220 nodes, 266 edges, 2 clusters, `truncated: false`. No code from the cloned repository was executed; the indexer parses source with `ast`.
+- **Known issues / TODOs:** browser UI confirmation is **SKIPPED** because no browser/Playwright/Puppeteer runner is installed in this environment; the API path is fully verified. `backend/repotrackr.db.bak` remains untracked in the working tree and must never be committed. Vite's large-chunk advisory and the missing frontend test runner remain documented limitations.
+
+---
+
+## Audit closeout - Task 6: documentation accuracy and dev-dependency verification
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `docker/.gitkeep`; deleted the zero-byte `docker/docker-compose.yml`; modified `README.md`, `frontend/README.md`, `docs/mock_responses.md`, `docs/project_summary.md`, `docs/changes.md`; no other files changed.
+- **What changed and why:** the root README now describes Parts 1–2 as implemented, lists the live index/graph endpoints and 301 tests, documents the folder layout as it exists, and adds a Known limitations section (no AI/evals, CLI-only retrieval, single-process assumptions, graph caps, no Docker stack, no frontend test runner). `frontend/README.md` replaced the untouched Vite template with project-specific setup, env vars, commands, API boundary and state-handling notes. `docs/mock_responses.md` now shows the neutral 201 duplicate signup, the 401 `email_not_verified` login code, validation details without submitted `input`, live Part 2 index/summary/graph examples, and limits the 501 section to Part 3–4. The empty compose file was removed and replaced by `.gitkeep` so the approved `docker/` folder remains without a misleading placeholder.
+- **New commands / env variables / endpoints / migrations:** none. `requirements-dev.txt` was installed into a fresh temporary venv (outside the repo) and `python -m pytest -q` reported **301 passed, 10 warnings in 7.92s** there, confirming the pinned dev requirements are sufficient.
+- **Verification:** clean-venv install + pytest as above; `cd backend && .venv/bin/python -m pytest -q` still **301 passed**; `cd frontend && npm run typecheck && npm run lint && npm run build` clean (0 lint warnings).
+- **Known issues / TODOs:** `docker/` still has no real compose file or Dockerfile; Large Vite chunks and the absence of a frontend test runner remain documented limitations. No new docs claims are unverified.
+
+---
+
+## Audit closeout - Task 5: frontend states, clean lint, static-page note
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/RepoWorkspace.tsx`, `frontend/src/components/dashboard/MiniGraphThumb.tsx`, `frontend/src/components/workspace/PlanPanel.tsx`, `frontend/src/components/ui/button.tsx`, `frontend/src/components/ui/badge.tsx`, `README.md`, `docs/project_summary.md`, `docs/changes.md`; folded in the pre-existing Phase B frontend hardening edits to `frontend/src/api/client.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/lib/tokenStorage.ts`; no files created or deleted.
+- **What changed and why:** the Dashboard now has a single cancellation-guarded `load()` used by the first render, Refresh and Retry, with explicit skeleton, error/Retry and empty states; `RepoWorkspace` gained a Retry for the repository load alongside the existing graph/summary/status states. The four lint warnings are gone: `MiniGraphThumb` uses pure index-seeded values instead of mutating render state, `PlanPanel` uses prefix sums instead of a mutated cursor, and `button.tsx`/`badge.tsx` no longer export their `cva` variant helpers so React Fast Refresh can preserve component state (unused externally; prop types still exported). `README.md` states that loading/error/Retry/empty states are N/A on static pages (landing, Developer, account settings), which use toasts and inline form feedback. The earlier frontend auth hardening (401 refresh-retry with `rt:auth-invalidated` and token-generation guards, reflected in `AuthContext`/`client.ts`/`tokenStorage.ts`) was preserved here.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` passed; `npm run lint` → **0 warnings, 0 errors**; `npm run build` → succeeded (`✓ built in 649ms`, only the pre-existing large-chunk advisory). Backend tests were unchanged from Task 4 (301 passing).
+- **Known issues / TODOs:** no frontend test runner is configured, so state transitions are verified by typecheck/lint/build and review only. Vite still reports large chunks (elk/Graph3D) as an advisory.
+
+---
+
+## Audit closeout - Task 4: machine-readable unverified-login code + backend auth hardening
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/core/errors.py`; modified `backend/app/main.py`, `backend/app/features/auth/router.py`, `backend/tests/test_auth.py`, `docs/api_contract.md`, `docs/project_summary.md`, `docs/changes.md`, `frontend/src/api/auth.ts`, `frontend/src/lib/authErrors.ts`; folded in the pre-existing backend hardening edits to `backend/.env.example`, `backend/app/core/config.py`, `backend/app/core/email.py`, `backend/app/features/auth/dependencies.py`, `backend/app/security/{__init__,passwords,tokens}.py`, `backend/tests/conftest.py` and created `backend/tests/test_batch1_hardening.py`; no files deleted.
+- **What changed and why:** `GET /auth/login` still answers an unverified account with 401 and the same neutral `"Invalid email or password"` text as a bad login, but now raises `EmailNotVerifiedError`, a typed `ApiHTTPException` whose `code` is copied into the shared `{"error": {...}}` envelope by the global handler. Clients can therefore offer verification without account enumeration from the message. `describeAuthError()` keys off `error.code === 'email_not_verified'` (keeping the old 403 branch as a fallback), and the stale 403 comment in `auth.ts` was corrected. The earlier Phase B backend auth hardening (neutral responses, dummy hash, random refresh `jti` with single-use consumption, token invalidation, required `exp`, unverified-token rejection, stripped validation input, CORS `*` rejection, extra rate limits) was preserved and committed here so each audit task has one commit. `docs/api_contract.md` now documents the new code, the graph endpoint that Task 3 added, and the real error envelope instead of `{"detail": ...}` placeholders.
+- **New commands / env variables / endpoints / migrations:** error code `email_not_verified` on `POST /auth/login` only (HTTP 401 unchanged). No new endpoint, command or migration.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q` → **301 passed, 10 warnings in 7.65s** (including the updated unverified-login assertions and the 13 Phase B hardening tests); `cd frontend && npm run typecheck` passed; `npm run lint` reported only the same 4 known warnings (0 errors).
+- **Known issues / TODOs:** the code is emitted only when the password matches an unverified account; a probe with a wrong password stays indistinguishable by design. No frontend unit test runner exists, so the code-based branch is covered only by review/typecheck.
+
+---
+
+## Audit closeout - Task 3: real deterministic graph endpoint
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/features/indexing/graph_out.py`, `backend/tests/test_graph_endpoint.py` and `frontend/src/lib/env.ts`, `frontend/.env.example`; modified `backend/app/schemas/indexing.py`, `backend/app/features/indexing/router.py`, `backend/app/tasks/__init__.py`, `frontend/src/types/graph.ts`, `frontend/src/api/galaxy.ts`, `frontend/src/pages/RepoWorkspace.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the indexing job now persists the full `build_graph()` output (nodes, edges, per-module centrality) in `index_summary`, because the clone folder is deleted after the job. A new `GET /repos/{repo_id}/graph` validates that stored summary and maps it to the frontend `Graph` contract in `graph_out.py`: module/class/function nodes get a cluster, normalized centrality, source line and `isEntry`, edges keep their typed `kind`, and clusters are derived from node paths. Responses are capped at 300 nodes and 1000 edges, with `truncated: true` and no dangling edges. The router prefix moved from `/repos/{repo_id}/index` to `/repos/{repo_id}` so `/graph` can live alongside `/index`, `/index/status` and `/index/summary` without changing those paths. On the client, `getGraph` calls the real endpoint by default; demo data is now opt-in via `VITE_USE_MOCKS=true` (typed through `src/lib/env.ts`, default `false`, documented in `frontend/.env.example`). `RepoWorkspace` fetches the graph separately from the repo so a 409 during indexing no longer blanks the page, and has explicit loading, error/Retry and empty states plus a capped-graph note.
+- **New commands / env variables / endpoints / migrations:** `GET /repos/{repo_id}/graph` (auth required, 404 for foreign/missing repo, 409 until `ready`, 200 `GraphOut`); frontend `VITE_USE_MOCKS` (default `false`) and `VITE_API_URL` template at `frontend/.env.example`. No migration or backend env variable changed.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q tests/test_graph_endpoint.py tests/test_indexing.py` → **15 passed**; full `cd backend && .venv/bin/python -m pytest -q` → **301 passed, 10 warnings in 7.32s**. `cd frontend && npm run typecheck` passed and `npm run lint` reported only the 4 known warnings (0 errors).
+- **Known issues / TODOs:** graph nodes are limited to the stored Python index; repos indexing to `failed` keep showing the empty graph state until reindexed. `VITE_USE_MOCKS` affects only the graph (Part 3–4 stubs keep their own fallback). Existing summaries written before this change have no `graph_nodes`, so the endpoint returns an empty graph until those repos are reindexed.
+
+---
+
+## Audit closeout - Task 2: line-preserving secret redaction
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/pipeline/clone/redaction.py` and `backend/tests/pipeline/test_redaction.py`; modified `backend/app/pipeline/clone/__init__.py`, `backend/app/pipeline/chunking/builder.py`, `backend/app/tasks/__init__.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** added one reusable `redact_secrets(text) -> text` in the clone package that replaces credential-shaped values inside a line with `[REDACTED]` and emits exactly one output line per input line. It covers AWS/Google API keys, GitHub and Slack tokens, OpenAI-style keys, JWTs, PEM private-key blocks and string literals assigned to password/secret/token/api-key names, while leaving environment lookups, empty strings and documented placeholders untouched. Filename-based stripping was left as-is. The chunk builder now redacts every stored chunk (including cache hits, with token counts recomputed) and the background task redacts symbol docstrings and signatures before writing `index_summary`, so file:line citations remain correct and no stored source text carries a real key.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q tests/pipeline/test_redaction.py tests/pipeline/test_chunking.py tests/test_indexing.py` → **33 passed, 10 warnings**; full `cd backend && .venv/bin/python -m pytest -q` → **296 passed, 10 warnings in 7.04s**.
+- **Known issues / TODOs:** no inline-secret redaction runs on CLI output that is only printed, nor on exception text written to `error_message`; the function is ready for reuse before Part 3 model calls.
+
+---
+
+## Audit closeout - Task 1: bring local database to head
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `docs/changes.md`; created the gitignored backup `backend/repotackr.db.bak`; no tracked source files changed.
+- **What changed and why:** backed up the local SQLite database before upgrading it, then applied the two pending Alembic migrations so the development database matches the models.
+- **New commands / env variables / endpoints / migrations:** `cd backend && .venv/bin/python -m alembic upgrade head` (applied `09282e667a32 -> b7c1f2a9d4e6 -> c4d8e7a1b2f3`); `cd backend && .venv/bin/python -m alembic check`.
+- **Verification:** `alembic current` reported `c4d8e7a1b2f3 (head)`; `alembic check` reported `No new upgrade operations detected.`
+- **Known issues / TODOs:** the backup is deliberately untracked and must never be committed.
+
+---
+
+## Bug Hunt Phase B - Batch 1 (rows 1, 2, 6, 7, 8, 9, 10, 11, 12, 21, 22, 30)
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/tests/test_batch1_hardening.py`; modified `backend/.env.example`, `backend/app/core/config.py`, `backend/app/core/email.py`, `backend/app/features/auth/dependencies.py`, `backend/app/features/auth/router.py`, `backend/app/main.py`, `backend/app/security/__init__.py`, `backend/app/security/passwords.py`, `backend/app/security/tokens.py`, `backend/tests/conftest.py`, `backend/tests/test_auth.py`, `docs/api_contract.md`, `docs/project_summary.md`, `frontend/src/api/client.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/lib/tokenStorage.ts`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/RepoWorkspace.tsx`; no files deleted.
+- **What changed and why:** Signup/login/resend/forgot now return neutral responses for unknown or duplicate accounts, and login verifies unknown users against a dummy argon2 hash. Refresh JWTs carry a random `jti`; refresh consumes the stored row with one conditional update and revoked rows are never reactivated. Password reset and change-password invalidate all refresh tokens plus unused RESET tokens. `decode_token` requires `exp`; `get_current_user` rejects unverified users. Validation errors strip `input`/`ctx`; SMTP fallback logs omit tokenized bodies; CORS rejects `*` because credentials are enabled. Added rate limits to verify-email, refresh, reset-password, change-password and logout. The frontend no-token branch sets `anonymous`, `client.ts` emits `rt:auth-invalidated` on final auth failure, `AuthContext` clears tokens and pollers stop, and token writes are guarded by a generation counter. Docs now state that rate limiting and startup recovery assume a single process.
+- **New commands / env variables / endpoints / migrations:** new env vars `RATE_LIMIT_REFRESH`, `RATE_LIMIT_VERIFY_EMAIL`, `RATE_LIMIT_RESET_PASSWORD`, `RATE_LIMIT_CHANGE_PASSWORD`, `RATE_LIMIT_LOGOUT`; no new commands, endpoints or migrations. No schema change.
+- **Verification:** the 13 new hardening tests plus 3 updated existing tests failed before the fixes (16 failed) and passed after. Full backend `python -m pytest -q -p no:cacheprovider` → **284 passed, 10 warnings in 15.77s**. Frontend `npm run typecheck` passed, `npm run lint` → 4 warnings / 0 errors (same pre-existing four), `npm run build` → 5551 modules transformed, built in 1.42s. Row 22 reproduced before fixing: `CORS_ORIGINS=["*"]` returned `Access-Control-Allow-Origin: https://evil.example` with `Access-Control-Allow-Credentials: true`. Fresh-profile CDP on a new Vite/backend pair showed `/login`, `/signup` and `/forgot-password` rendered with 0 localStorage keys and no spinner, and `/dashboard` redirected to `/login`; seeding invalid tokens produced 2 `rt:auth-invalidated` events, a `/login` redirect and 0 localStorage keys; a 1.5s delayed refresh that resolved after an invalidation event did not restore tokens. No commit or push was made.
+- **Known issues / TODOs:** rows 21 and 24 are documented single-process assumptions, not fixed. Row 35 and the remaining Batch 2–4 rows are untouched. The generation counter was verified in a browser with a mocked delayed refresh, not against a real backend race. `docs/postman_collection.json` still contains older signup/duplicate/login/unverified examples; `docs/openapi.json` was regenerated but unchanged because these status changes are not declared in FastAPI schemas. The four frontend lint warnings remain out of scope; no frontend unit runner exists.
+
+---
+
 ## Closeout Phase 4 - refresh-token revocation and atomic reset consumption
 
 - **Date:** 2026-11-25

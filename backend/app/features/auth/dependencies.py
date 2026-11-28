@@ -23,6 +23,6 @@ def get_current_user(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
 
     user = db.get(User, user_id)
-    if user is None:
+    if user is None or not user.is_verified:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
     return user

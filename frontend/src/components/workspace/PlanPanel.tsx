@@ -62,11 +62,15 @@ export function PlanPanel({
   )
   const total = items.length || 1
 
-  let cursor = 0
-  const stops = RING_ORDER.map((status) => {
-    const start = (cursor / total) * 100
-    cursor += counts[status]
-    const end = (cursor / total) * 100
+  // Prefix sums give each ring segment its start/end without mutating a
+  // render-scope variable inside the map callback.
+  const prefix = RING_ORDER.reduce<number[]>(
+    (acc, status) => [...acc, acc[acc.length - 1] + counts[status]],
+    [0],
+  )
+  const stops = RING_ORDER.map((status, index) => {
+    const start = (prefix[index] / total) * 100
+    const end = (prefix[index + 1] / total) * 100
     return `${PLAN_STATUS_META[status].color} ${start}% ${end}%`
   })
   const gradient = `conic-gradient(from -90deg, ${stops.join(', ')})`

@@ -5,19 +5,25 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.features.indexing.graph_out import graph_from_summary
 from app.features.repos.dependencies import get_owned_repo
 from app.models.repo import Repo
-from app.schemas.indexing import IndexStartOut, IndexStatusOut, IndexSummaryOut
+from app.schemas.indexing import (
+    GraphOut,
+    IndexStartOut,
+    IndexStatusOut,
+    IndexSummaryOut,
+)
 from app.tasks import run_index_pipeline
 
 logger = logging.getLogger("app")
 
-router = APIRouter(prefix="/repos/{repo_id}/index", tags=["indexing"])
+router = APIRouter(prefix="/repos/{repo_id}", tags=["indexing"])
 
 RUNNING_STATUSES = {"queued", "cloning", "indexing"}
 
 
-@router.post("", response_model=IndexStartOut, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/index", response_model=IndexStartOut, status_code=status.HTTP_202_ACCEPTED)
 def start_index(
     background_tasks: BackgroundTasks,
     repo: Repo = Depends(get_owned_repo),
@@ -38,7 +44,7 @@ def start_index(
     return IndexStartOut(status="queued", message="Indexing queued.")
 
 
-@router.get("/status", response_model=IndexStatusOut)
+@router.get("/index/status", response_model=IndexStatusOut)
 def index_status(repo: Repo = Depends(get_owned_repo)) -> IndexStatusOut:
     return IndexStatusOut(
         status=repo.status,
@@ -47,7 +53,7 @@ def index_status(repo: Repo = Depends(get_owned_repo)) -> IndexStatusOut:
     )
 
 
-@router.get("/summary", response_model=IndexSummaryOut)
+@router.get("/index/summary", response_model=IndexSummaryOut)
 def index_summary(repo: Repo = Depends(get_owned_repo)) -> IndexSummaryOut:
     if repo.status != "ready" or not repo.index_summary:
         raise HTTPException(status.HTTP_409_CONFLICT, "Index is not ready.")
@@ -60,3 +66,21 @@ def index_summary(repo: Repo = Depends(get_owned_repo)) -> IndexSummaryOut:
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Stored index summary is invalid.",
         ) from exc
+
+
+@router.get("/graph", response_model=GraphOut)
+def index_graph(repo: Repo = Depends(get_owned_repo)) -> GraphOut:
+    """Serve the deterministic graph built by build_graph() to the workspace UI."""
+    if repo.status != "ready" or not repo.index_summary:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Index is not ready.")
+
+    try:
+        summary = IndexSummaryOut(**repo.index_summary)
+    except ValidationError as exc:
+        logger.error("Stored index summary is invalid for repo %d: %s", repo.id, exc)
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Stored index summary is invalid.",
+        ) from exc
+
+    return graph_from_summary(summary)

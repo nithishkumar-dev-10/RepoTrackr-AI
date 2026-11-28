@@ -31,4 +31,6 @@ export interface Graph {
   nodes: GraphNode[]
   edges: GraphEdge[]
   clusters: GraphCluster[]
+  /** True when the backend capped the node or edge count for the renderer. */
+  truncated?: boolean
 }

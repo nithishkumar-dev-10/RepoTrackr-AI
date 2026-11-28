@@ -1,7 +1,7 @@
 # Project Summary
 
 ## What This Project Is
-RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. The backend has settings, the database engine, the SQLAlchemy models, four Alembic migrations, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh with stored refresh-token hashes, logout with server-side refresh revocation, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). The Part 2 index endpoints now run the pipeline in a `BackgroundTasks` job; the remaining Part 3–4 endpoints are still ownership-checked stubs that return `501 {"status": "not_implemented"}`. A complete React + TypeScript + Vite frontend lives in `frontend/`: a landing page, signup/login/verify-email/forgot-password/reset-password, account settings, a dashboard, a repo workspace (dark 3D code-graph canvas with Overview/Reader/Plan/Context tabs and a ⌘K command bar) and a Developer page. The Overview tab and index controls call the real Part 2 endpoints; the graph and the Part 3–4 query modes still use local mock data, with the fake-evidence labels marked "Not implemented yet".
+RepoTrackr AI is a backend-first tool for ingesting GitHub repositories and reasoning about them: it clones a repo, builds a deterministic index and static analysis of the code, and only then lets an AI layer explain things on top of that evidence. The backend has settings, the database engine, the SQLAlchemy models, four Alembic migrations, and a FastAPI app that serves `GET /health` plus a complete email/password auth flow (signup, email verification, resend, login, token refresh with stored refresh-token hashes, logout with server-side refresh revocation, forgot/reset/change password, delete account, and `GET /auth/me`) with per-IP rate limiting on the abuse-prone endpoints, CORS, and consistent JSON error handling, plus a repo-records feature (add, list, get, delete a saved GitHub link, with duplicate blocking). The Part 2 index endpoints now run the pipeline in a `BackgroundTasks` job; the remaining Part 3–4 endpoints are still ownership-checked stubs that return `501 {"status": "not_implemented"}`. A complete React + TypeScript + Vite frontend lives in `frontend/`: a landing page, signup/login/verify-email/forgot-password/reset-password, account settings, a dashboard, a repo workspace (dark 3D code-graph canvas with Overview/Reader/Plan/Context tabs and a ⌘K command bar) and a Developer page. The Overview tab, index controls and workspace graph call the real Part 2 endpoints; only the Part 3–4 query modes still use local mock data, with the fake-evidence labels marked "Not implemented yet".
 
 The deterministic indexing path is now wired end to end: `app/tasks/__init__.py` runs clone → AST index → graph → chunk after `POST /repos/{id}/index`, persists `Repo.status`, `Repo.error_message`, `Repo.commit_sha` and a JSON index summary, and skips work when the commit SHA is unchanged. The cache check accepts both `ready` and `queued`, because the HTTP start endpoint writes `queued` before the background task runs. `app/pipeline/clone/` performs a safe shallow clone with size/timeout limits and secret/junk cleanup; `app/pipeline/indexer/` parses Python source with `ast` into symbols, imports and calls; `app/pipeline/graph/` turns that index into a networkx module/symbol graph with PageRank centrality, a suggested reading order and a Mermaid diagram; `app/pipeline/chunking/` cuts the index into one chunk per function/class/method, counts tokens with `tiktoken` and caches chunks per file hash in SQLite; and `app/pipeline/retrieval/` ranks those stored chunks with BM25 as a CLI/library only. `app/analysis/*`, `app/ai/*` and `app/agent` are still empty or stub-only: there is no LLM provider (Gemini or otherwise), no embeddings, no eval set, and no retrieval/agent endpoint.
 
@@ -34,6 +34,7 @@ RepoTrackr-AI/
 │   │   │   ├── config.py            # Settings class + cached get_settings()
 │   │   │   ├── database.py          # Engine, Base, SessionLocal, get_db()
 │   │   │   ├── email.py             # send_email (SMTP/dev console), verify + reset email helpers
+│   │   │   ├── errors.py            # ApiHTTPException / EmailNotVerifiedError: typed error codes
 │   │   │   └── ratelimit.py         # slowapi Limiter (per-IP) used by auth endpoints
 │   │   ├── models/
 │   │   │   ├── __init__.py          # Re-exports User, EmailToken, RefreshToken, Repo
@@ -64,7 +65,8 @@ RepoTrackr-AI/
 │   │   │   │   ├── dependencies.py  # get_owned_repo: 404 unless the repo belongs to the caller
 │   │   │   │   └── router.py        # add/list/get/delete my repos (auth required)
 │   │   │   ├── plan/router.py       # Stub: POST/GET /repos/{id}/plan (501)
-│   │   │   ├── indexing/router.py   # POST /index + GET /status + GET /summary (background task)
+│   │   │   ├── indexing/router.py   # POST /index + GET /index/status + GET /index/summary + GET /graph
+│   │   │   │   └── graph_out.py     # Maps stored build_graph() output to the frontend Graph contract
 │   │   │   ├── context/router.py    # Stubs: POST /repos/{id}/context + /query (501)
 │   │   │   └── reader/router.py     # Stub: GET /repos/{id}/reader (501)
 │   │   ├── pipeline/
@@ -75,7 +77,8 @@ RepoTrackr-AI/
 │   │   │   │   ├── cleanup.py       # remove_clone, clone_workspace, sweep_stale_clones
 │   │   │   │   ├── errors.py        # CloneError + error codes (invalid_url, size_exceeded, …)
 │   │   │   │   ├── filters.py       # is_skipped_dir, is_secret_file, clean_repo
-│   │   │   │   └── models.py        # CloneConfig, CloneResult
+│   │   │   │   ├── models.py        # CloneConfig, CloneResult
+│   │   │   │   └── redaction.py     # redact_secrets: line-preserving in-line secret replacement
 │   │   │   ├── indexer/
 │   │   │   │   ├── __init__.py      # Re-exports index_repo/parse_file/parse_source + models
 │   │   │   │   ├── __main__.py      # CLI: python -m app.pipeline.indexer <folder>
@@ -131,6 +134,7 @@ RepoTrackr-AI/
 │       ├── test_repos.py            # Repo CRUD endpoint tests (19)
 │       ├── test_stubs.py            # Part 3-4 stub tests, 501 / 401 / 404 (20)
 │       ├── test_indexing.py         # Index flow, status, summary, cache, ownership (10)
+│       ├── test_graph_endpoint.py   # GET /graph shape, 401/404/409, caps (5)
 │       ├── test_schema_defaults.py  # Raw-INSERT regression tests for ORM/migration defaults (2)
 │       └── pipeline/
 │           ├── __init__.py          # Test package marker
@@ -141,12 +145,12 @@ RepoTrackr-AI/
 │           ├── test_chunking.py     # chunks, token counts, cache (11)
 │           └── test_retrieval.py    # tokenizer, BM25 ranking, queries runner (19)
 ├── docker/
-│   └── docker-compose.yml           # Empty; no Dockerfile yet
+│   └── .gitkeep                     # Empty placeholder; no compose file or Dockerfile yet
 ├── docs/
 │   ├── RepoTrackr-AI-Execution-Plan.md  # Source-of-truth roadmap (Parts 1-4)
 │   ├── project_summary.md           # This file (canonical)
 │   ├── api_contract.md              # Endpoint contract for Parts 1-4
-│   ├── mock_responses.md            # Example JSON for frontend mocks
+│   ├── mock_responses.md            # Example JSON: live Part 1/2 responses + Part 3–4 mocks
 │   ├── openapi.json                 # Generated OpenAPI 3.1 spec
 │   ├── postman_collection.json      # Postman collection generated from the spec
 │   └── changes.md                   # Step-by-step change log (all history)
@@ -157,7 +161,7 @@ RepoTrackr-AI/
 │   ├── data/.gitkeep                # Empty — eval data
 │   └── plan_verifier/.gitkeep       # Empty — plan verification evals
 ├── frontend/                        # React + TS + Vite client (see Layer 8)
-│   ├── .env.example                 # VITE_API_URL template (a real .env is gitignored)
+│   ├── .env.example                 # VITE_API_URL + VITE_USE_MOCKS template (a real .env is gitignored)
 │   ├── index.html                   # Vite HTML entry
 │   ├── package.json                 # Scripts: dev, build, typecheck, lint
 │   ├── vite.config.ts               # Vite + Tailwind + `@` alias
@@ -169,7 +173,7 @@ RepoTrackr-AI/
 │       ├── main.tsx                 # Providers (MotionConfig/Auth/Toast/Tooltip) + root render
 │       ├── App.tsx                  # Route table (public / guest / protected)
 │       ├── index.css                # Design tokens (colors, radii, glow tokens/utilities) + Tailwind layers
-│       ├── api/                     # client.ts, auth.ts, repos.ts, galaxy.ts (Part 2 live; 501 mock fallback)
+│       ├── api/                     # client.ts, auth.ts, repos.ts, galaxy.ts (Part 2 live incl. /graph; 501 mock fallback)
 │       ├── mock/                    # Typed mock data for the 501 endpoints
 │       ├── types/                   # Wire + UI types (auth, repo, graph, query, pipeline, api)
 │       ├── lib/                     # env, tokenStorage, motion, validation, authErrors, github,
@@ -187,7 +191,7 @@ RepoTrackr-AI/
 ## The Stack at a Glance
 Settings -> Database Core -> Data Models -> Schema Migrations (Alembic) -> Pipeline & Analysis -> AI Layer -> Features & HTTP API -> Frontend, with Docker/Evals/Scripts as supporting tooling.
 
-(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, the complete auth feature with rate limiting, the repo-records feature (add/list/get/delete), the live Part 2 index endpoints, the remaining Part 3–4 stub endpoints, the Pydantic schemas, the endpoint/mock/OpenAPI/Postman contract, and the `security` helpers (password hashing, JWT, email tokens), plus unit and endpoint tests. Layer 8 (the frontend) is built and talks to Layer 7: its Overview tab, status polling and start/retry actions use the live Part 2 routes, while its graph and Part 3–4 query modes still use labelled mock data. Layer 5 is wired for indexing: `pipeline/clone`, `pipeline/indexer`, `pipeline/graph`, `pipeline/chunking`, `pipeline/cache` and `tasks` are called by `POST /repos/{id}/index`; `pipeline/retrieval` remains a CLI/library, and all of `analysis/` is still empty. Layer 6 (AI) is still an empty skeleton, and its endpoints are the `501` stubs the frontend marks "Not implemented yet".)
+(Layers 1–4 are fully built. Layer 7 has its app factory, `GET /health`, the complete auth feature with rate limiting, the repo-records feature (add/list/get/delete), the live Part 2 index endpoints, the remaining Part 3–4 stub endpoints, the Pydantic schemas, the endpoint/mock/OpenAPI/Postman contract, and the `security` helpers (password hashing, JWT, email tokens), plus unit and endpoint tests. Layer 8 (the frontend) is built and talks to Layer 7: its Overview tab, status polling, start/retry actions and workspace graph use the live Part 2 routes, while only its Part 3–4 query modes still use labelled mock data. Layer 5 is wired for indexing: `pipeline/clone`, `pipeline/indexer`, `pipeline/graph`, `pipeline/chunking`, `pipeline/cache` and `tasks` are called by `POST /repos/{id}/index`; `pipeline/retrieval` remains a CLI/library, and all of `analysis/` is still empty. Layer 6 (AI) is still an empty skeleton, and its endpoints are the `501` stubs the frontend marks "Not implemented yet".)
 
 ## Layer by Layer
 
@@ -405,7 +409,7 @@ It drops `repos`, then `email_tokens`, then `users` (and their indexes).
 
 **What it is:** The deterministic half of the product: a safe shallow clone of public GitHub repos with scratch cleanup, an AST index of Python code, a networkx code graph with centrality and reading order, chunking with token counts and a SQLite file-hash cache, and BM25 retrieval over those chunks. Index, graph, chunk and retrieve each ship a `python -m` CLI; clone/index/graph/chunk are also driven by the `app/tasks` background job after `POST /repos/{id}/index`, with commit-SHA cache checks and a persisted summary. BM25 retrieval remains CLI/library-only, and the analysis passes (reader order, retrieval, plan checks, context packing) are still empty packages.
 **Why it exists:** The design rule is that deterministic analysis decides what is true; the AI only retrieves, reasons over evidence and explains, and every claim cites `file:line`. Keeping this code separate from `ai/` enforces that, and it must keep working when no AI is available.
-**Files in it:** `backend/app/pipeline/clone/{__init__,clone,cleanup,errors,filters,models}.py`, `backend/app/pipeline/indexer/{__init__,__main__,detect,models,parser,repo}.py`, `backend/app/pipeline/graph/{__init__,__main__,builder,mermaid,models,reading_order}.py`, `backend/app/pipeline/chunking/{__init__,__main__,builder,models,store}.py`, `backend/app/pipeline/retrieval/{__init__,__main__,index,models,queries,tokenizer}.py`, plus `backend/app/pipeline/cache/__init__.py`, `backend/app/analysis/{reader_order,retrieval,plan_checks,packer}/__init__.py` and `backend/app/tasks/__init__.py`.
+**Files in it:** `backend/app/pipeline/clone/{__init__,clone,cleanup,errors,filters,models,redaction}.py`, `backend/app/pipeline/indexer/{__init__,__main__,detect,models,parser,repo}.py`, `backend/app/pipeline/graph/{__init__,__main__,builder,mermaid,models,reading_order}.py`, `backend/app/pipeline/chunking/{__init__,__main__,builder,models,store}.py`, `backend/app/pipeline/retrieval/{__init__,__main__,index,models,queries,tokenizer}.py`, plus `backend/app/pipeline/cache/__init__.py`, `backend/app/analysis/{reader_order,retrieval,plan_checks,packer}/__init__.py` and `backend/app/tasks/__init__.py`.
 **Depends on:** Layer 1 (clone size/timeout limits and the retention window come from settings) — and on nothing else at runtime; the pipeline works on source files, not on DB sessions or the ORM.
 **Used by:** the CLIs described below, the `app/tasks` background job started by the indexing endpoint, and the FastAPI lifespan, which calls `sweep_stale_clones()` and `mark_stuck_repos_failed()` on startup.
 
@@ -424,6 +428,12 @@ Clones are temporary scratch space: the derived data and the commit SHA are kept
 *Why do we need it?* Clones are scratch, not durable state — they must not pile up on disk.
 *What breaks without it?* Disk fills with stale clones and orphaned partial folders.
 *Think of it as:* wiping the prep counter clean after each dish is plated.
+
+**What is `pipeline/clone/redaction.py`?**
+`redact_secrets(text)` replaces credential-shaped values *inside* each line with `[REDACTED]` and returns exactly one output line per input line. It recognizes AWS access keys, Google API keys, GitHub and Slack tokens, OpenAI-style `sk-` keys, JWT-looking strings, PEM private-key blocks (one `[REDACTED]` line per original line) and string literals assigned to names ending in `password`, `passwd`, `secret`, `token`, `api_key`, `apikey`, `auth` or `private_key`. It deliberately leaves `os.getenv`/`os.environ` lookups, empty strings and documentation placeholders such as `changeme`, `<...>` and `xxx` alone. Filename-based stripping in `filters.py` is unchanged; this is the in-line second layer. `build_chunks()` applies it to every stored chunk (including cache hits, with token counts recomputed), and `tasks/__init__.py` applies it to symbol docstrings and signatures before writing `index_summary`, so `file:line` citations stay valid.
+*Why do we need it?* Removing whole files is not enough: a real key pasted into a `.py` string would otherwise be persisted in chunks and summaries and could later reach a model.
+*What breaks without it?* Stored derived text leaks credentials, and dropping whole lines would shift every later `file:line` citation.
+*Think of it as:* blacking out the sensitive words on a photocopy without removing any of the numbered lines.
 
 **What is `pipeline/indexer`?**
 `parse_source(source, file)` walks Python's `ast` and produces a `FileIndex`: every function, class and method as a `Symbol` (name, kind, `line_start`/`line_end`, signature, docstring, dotted `parent`), every import as an `ImportRef`, and every call as a `CallRef`. `index_repo(folder)` walks a folder with the ignore rules in `repo.py` (`IGNORED_DIRS`, `IGNORED_FILE_PREFIXES`, `IGNORED_FILE_SUFFIXES`), parses each `.py` file and returns a `RepoIndex`. `detect.py` classifies test files and finds entry points (route decorators, `__name__ == "__main__"` guards, argparse/Click/Typer CLIs), which the graph step uses as the start of the reading order. Analyzed code is parsed, never imported or executed.
@@ -456,7 +466,7 @@ Clones are temporary scratch space: the derived data and the commit SHA are kept
 *Think of it as:* a lab notebook that records failed experiments next to the successful ones.
 
 **What is `tasks/__init__.py`?**
-`run_index_pipeline(repo_id)` is the bridge between the HTTP API and the deterministic pipeline: it moves the repo through `queued → cloning → indexing → ready`, calls `clone_workspace()`, `index_repo()`, `build_graph()` and `build_chunks()`, stores `commit_sha` and `index_summary`, logs elapsed seconds per 10k Python lines, and writes a readable `error_message` with `failed` on any exception. `mark_stuck_repos_failed()` repairs repos left in `queued`/`cloning`/`indexing` by a process restart.
+`run_index_pipeline(repo_id)` is the bridge between the HTTP API and the deterministic pipeline: it moves the repo through `queued → cloning → indexing → ready`, calls `clone_workspace()`, `index_repo()`, `build_graph()` and `build_chunks()`, redacts secret-shaped values in symbol docstrings and signatures, stores `commit_sha` and `index_summary`, logs elapsed seconds per 10k Python lines, and writes a readable `error_message` with `failed` on any exception. `mark_stuck_repos_failed()` repairs repos left in `queued`/`cloning`/`indexing` by a process restart. Deployment note: startup recovery assumes a single process; with multiple workers it can mark jobs that are still live in another worker as `failed`.
 *Why do we need it?* The endpoint must return immediately while the slow clone/index work happens outside the request, and the UI needs durable status to poll.
 *What breaks without it?* The start endpoint would block the request, and a crash mid-index would leave repos stuck forever.
 *Think of it as:* the kitchen that actually cooks the order after the waiter has acknowledged it.
@@ -517,11 +527,11 @@ Reserved for the loop where the model calls tools over retrieved evidence.
 
 **What it is:** The folder skeleton for the FastAPI application: the app object, request/response schemas, security helpers, and the per-feature route modules.
 **Why it exists:** It is the top edge the outside world talks to; keeping endpoints grouped by feature keeps routing readable as the app grows.
-**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, rate-limit handler, startup recovery, `GET /health` and the `GET /evals` stub), `backend/app/core/email.py` (SMTP sending with a dev console fallback, and verification/reset email helpers), `backend/app/core/ratelimit.py` (the slowapi `Limiter`), `backend/app/schemas/{__init__,common,auth,repo,indexing,stub}.py` (the Pydantic request/response models), `backend/app/security/{__init__,passwords,tokens,email_tokens}.py` (password hashing, JWT, email-token helpers), `backend/app/features/auth/{__init__,dependencies,router}.py` (the complete auth feature), `backend/app/features/repos/{__init__,dependencies,router}.py` (the repo-records feature plus the shared `get_owned_repo` dependency), the live `backend/app/features/indexing/router.py`, and the Part 3–4 stub routers `backend/app/features/{plan,reader,context}/router.py` and `backend/app/agent/router.py`.
+**Files in it:** `backend/app/main.py` (the app factory, CORS, global error handlers, rate-limit handler, startup recovery, `GET /health` and the `GET /evals` stub), `backend/app/core/email.py` (SMTP sending with a dev console fallback, and verification/reset email helpers), `backend/app/core/ratelimit.py` (the slowapi `Limiter`), `backend/app/schemas/{__init__,common,auth,repo,indexing,stub}.py` (the Pydantic request/response models), `backend/app/security/{__init__,passwords,tokens,email_tokens}.py` (password hashing, JWT, email-token helpers), `backend/app/features/auth/{__init__,dependencies,router}.py` (the complete auth feature), `backend/app/features/repos/{__init__,dependencies,router}.py` (the repo-records feature plus the shared `get_owned_repo` dependency), the live `backend/app/features/indexing/router.py` and `graph_out.py`, and the Part 3–4 stub routers `backend/app/features/{plan,reader,context}/router.py` and `backend/app/agent/router.py`.
 **Depends on:** Layers 1–5 (config, DB, models, migrations, the deterministic pipeline); the AI layer is not used yet.
 **Used by:** the frontend and any external client.
 
-*Part 1 is complete on the backend. `main.py` defines the app, `GET /health`, the rate-limit handling, startup stale-clone/stuck-repo recovery and the `GET /evals` stub, `schemas/` defines the Part 1 and indexing models plus the documented contract, `security/` implements password hashing, JWT and email-token helpers, `core/email.py` sends mail, `core/ratelimit.py` provides the limiter, `features/auth/` implements every Part 1 auth endpoint, and `features/repos/` implements repo CRUD. `features/indexing/` starts the Layer 5 background pipeline and serves status/summary; the remaining Part 3–4 routers are ownership-checked `501` stubs. The analysis and AI layers above are still empty `__init__.py`.*
+*Part 1 is complete on the backend. `main.py` defines the app, `GET /health`, the rate-limit handling, startup stale-clone/stuck-repo recovery and the `GET /evals` stub, `schemas/` defines the Part 1 and indexing models plus the documented contract, `security/` implements password hashing, JWT and email-token helpers, `core/email.py` sends mail, `core/ratelimit.py` provides the limiter, `features/auth/` implements every Part 1 auth endpoint, and `features/repos/` implements repo CRUD. `features/indexing/` starts the Layer 5 background pipeline and serves status/summary/graph; the remaining Part 3–4 routers are ownership-checked `501` stubs. The analysis and AI layers above are still empty `__init__.py`.*
 
 #### Study Notes for this layer
 
@@ -531,6 +541,8 @@ The FastAPI app factory (`create_app()`) plus the module-level `app = create_app
 *What breaks without it?* There is no server to run; `uvicorn app.main:app` cannot start, and interrupted repos stay stuck.
 *Think of it as:* the front door of the building — it now exists and opens.
 
+Every failure uses one JSON envelope, `{"error": {"code", "message", "details?"}}`. Plain `HTTPException`s become `http_error`; validation errors become `validation_error` with field details (the raw submitted `input`/`ctx` are stripped); unhandled errors become `internal_error`; rate limits become `http_error` 429. `app/core/errors.py` defines `ApiHTTPException` subclasses whose `code` is copied into that envelope by the global handler. `EmailNotVerifiedError` is the first such code: `/auth/login` keeps a neutral 401 message and returns `code: "email_not_verified"` so the frontend can offer verification without an account-enumeration signal in the text.
+
 **Why `create_app()` as a factory instead of a bare `app`?**
 It builds and configures a fresh `FastAPI` instance and returns it, with `app = create_app()` at module level for uvicorn.
 *Why do we need it?* Settings, middleware and handlers are applied in one obvious place, and tests can build isolated app instances.
@@ -538,13 +550,13 @@ It builds and configures a fresh `FastAPI` instance and returns it, with `app = 
 *Think of it as:* a recipe for assembling the store before opening, rather than a pre-built store you can't rearrange.
 
 **What is the CORS middleware doing here?**
-`add_middleware(CORSMiddleware, ...)` with `allow_origins=settings.CORS_ORIGINS` (plus all methods/headers and credentials).
+`add_middleware(CORSMiddleware, ...)` with `allow_origins=settings.CORS_ORIGINS` (plus all methods/headers and credentials). `Settings` rejects `*` in `CORS_ORIGINS` because credentials are always allowed.
 *Why do we need it?* The browser frontend is served from a different origin and needs the API to permit it.
 *What breaks without it?* The frontend's requests are blocked by the browser's same-origin policy.
 *Think of it as:* a guest list at the door naming exactly which websites may call in.
 
 **What are the global exception handlers?**
-Handlers for `RequestValidationError` (422), `StarletteHTTPException` (its status code), `RateLimitExceeded` (429), and `Exception` (500), all returning `{"error": {"code", "message", "details"?}}`.
+Handlers for `RequestValidationError` (422), `StarletteHTTPException` (its status code), `RateLimitExceeded` (429), and `Exception` (500), all returning `{"error": {"code", "message", "details"?}}`; validation details drop `input` and `ctx` so submitted values are never echoed.
 *Why do we need it?* Every error — including rate limiting — leaves the API in one consistent JSON shape instead of FastAPI's default `{"detail": ...}` or a raw traceback.
 *What breaks without it?* Clients would parse several error formats, and unhandled errors could leak internals (the unhandled handler logs the traceback server-side and returns only a generic message).
 *Think of it as:* a single standardized complaint form every department must use.
@@ -562,25 +574,25 @@ The complete Part 1 auth feature: `router.py` implements `POST /auth/signup`, `P
 *Think of it as:* the reception desk that issues your badge.
 
 **What does the auth `router.py` do?**
-It exposes the auth endpoints on an `APIRouter(prefix="/auth")`. Signup normalizes the email to lowercase, rejects duplicates (409), hashes the password, stores an unverified `User`, creates a `VERIFY` email token and sends the verification link. `verify-email` looks up the token by its hash and rejects invalid/expired/used tokens (400) before marking the user verified and the token used. `resend-verification` always returns the same 200 message (no account enumeration) and only sends when the account exists and is unverified, invalidating older unused verify tokens. `login` checks the password (401 on mismatch), blocks unverified users (403), issues access + refresh tokens, and records the refresh token's SHA-256 hash in `refresh_tokens`. `refresh` accepts only a refresh token (an access token is rejected 401), requires the presented hash to be stored, unrevoked and unexpired, revokes that row, and returns a fresh pair; because JWT `iat`/`exp` have second resolution, an identical newly issued token reactivates the same row instead of creating a duplicate. `logout` requires a bearer access token and, when `refresh_token` is supplied, revokes that stored refresh token server-side. `forgot-password` always returns the same 200 message, and only for an existing user creates a single-use `RESET` token and sends the email in the background. `reset-password` consumes the token with one conditional `UPDATE ... WHERE used_at IS NULL AND expires_at > now ... RETURNING user_id`, checks that exactly one row was consumed, then applies the password rule and sets the new hash. `change-password` verifies the current password, rejects reusing the old password, sets the new hash and revokes all of the user's refresh tokens. `delete-account` revokes those tokens and deletes the user (cascading to email tokens and repos). `/auth/me` returns the current user.
+It exposes the auth endpoints on an `APIRouter(prefix="/auth")`. Signup normalizes the email to lowercase, hashes the submitted password on every attempt, and returns the same neutral 201 message whether the account is new or already exists; existing accounts receive a fresh `VERIFY` email and older unused verify tokens are invalidated. `verify-email` looks up the token by its hash and rejects invalid/expired/used tokens (400) before marking the user verified and the token used. `resend-verification` and `forgot-password` generate token material on every request but only persist and send it for a matching account, and both return fixed 200 messages. `login` verifies the password against the stored hash or a dummy hash for unknown users and returns the same 401 message for unknown email, wrong password and unverified accounts; an unverified account with a correct password carries the distinct `email_not_verified` code from `core/errors.py` while the other cases stay `http_error`. Only verified users receive access + refresh tokens, and each refresh JWT has a random `jti`. `refresh` accepts only a refresh token (an access token is rejected 401), consumes the stored unrevoked row with one conditional `UPDATE ... WHERE revoked_at IS NULL AND expires_at > now ... RETURNING id`, and returns a fresh pair; revoked rows are never reactivated, so immediate reuse of the old token fails. `logout` requires a bearer access token and, when `refresh_token` is supplied, revokes that stored refresh token server-side. `reset-password` consumes the token with one conditional `UPDATE ... WHERE used_at IS NULL AND expires_at > now ... RETURNING user_id`, checks that exactly one row was consumed, sets the new hash, revokes all refresh tokens and invalidates all unused `RESET` tokens. `change-password` verifies the current password, rejects reusing the old password, sets the new hash, revokes all refresh tokens and invalidates all unused `RESET` tokens. `delete-account` revokes those tokens and deletes the user (cascading to email tokens and repos). `/auth/me` returns the current user.
 *Why do we need it?* It is the concrete account lifecycle the rest of the app is gated behind.
 *What breaks without it?* Accounts can't be created, recovered, or managed, so nothing downstream can be owned by a user.
 *Think of it as:* the reception desk that checks your ID, issues your badge, hands out reprints, and shreds your file when you leave.
 
 **What is `get_current_user`?**
-A FastAPI dependency in `features/auth/dependencies.py` that reads the `Authorization: Bearer <access_token>` header, decodes it as an access token via `decode_token`, loads the `User` by the token's subject, and returns it — raising a 401 `"Not authenticated"` for a missing, malformed, expired, wrong-type token or unknown user.
+A FastAPI dependency in `features/auth/dependencies.py` that reads the `Authorization: Bearer <access_token>` header, decodes it as an access token via `decode_token`, loads the `User` by the token's subject, and returns it — raising a 401 `"Not authenticated"` for a missing, malformed, expired, wrong-type token, unknown user or unverified user.
 *Why do we need it?* Protected routes (`/auth/me`, `/auth/logout`, `/auth/change-password`, `/auth/account`, and later repos) need one shared, tested way to turn a header into a user.
 *What breaks without it?* Every protected endpoint would re-implement token parsing and could drift or leak different errors.
 *Think of it as:* the bouncer who checks your wristband and lets you in as the person it names.
 
 **What is `core/email.py`?**
-The email service: `send_email()` sends via SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`EMAIL_FROM`), or, when `SMTP_HOST` is unset, logs the message to the console instead of sending (the dev fallback). `verification_link()`/`send_verification_email()` build and send the verification message; `reset_link()`/`send_reset_email()` do the same for password reset (links point at `FRONTEND_URL`).
+The email service: `send_email()` sends via SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD`/`EMAIL_FROM`), or, when `SMTP_HOST` is unset, logs only the recipient, subject and a "body omitted" warning (the dev fallback never logs tokenized links). `verification_link()`/`send_verification_email()` build and send the verification message; `reset_link()`/`send_reset_email()` do the same for password reset (links point at `FRONTEND_URL`).
 *Why do we need it?* Signup, resend and forgot-password must deliver links, but local dev has no mail server.
 *What breaks without it?* Emails can't be sent, and these flows can't be tested locally without real SMTP credentials.
 *Think of it as:* the mailroom — it posts letters when the post office is configured, and otherwise reads them aloud so you can still act.
 
 **What is `core/ratelimit.py`?**
-A slowapi `Limiter(key_func=get_remote_address)` that keys limits by client IP. The auth router decorates signup, login, forgot-password and resend-verification with `@limiter.limit(lambda: get_settings().RATE_LIMIT_*)`, and `main.py` attaches the limiter to `app.state.limiter` and registers a `RateLimitExceeded` handler that returns the standard 429 `http_error` `"Too many requests"` envelope. Limits come from `RATE_LIMIT_*` settings and are read per request.
+A slowapi `Limiter(key_func=get_remote_address)` that keys limits by client IP. The auth router decorates signup, login, forgot-password, resend-verification, verify-email, refresh, reset-password, change-password and logout with `@limiter.limit(lambda: get_settings().RATE_LIMIT_*)`, and `main.py` attaches the limiter to `app.state.limiter` and registers a `RateLimitExceeded` handler that returns the standard 429 `http_error` `"Too many requests"` envelope. Limits come from `RATE_LIMIT_*` settings and are read per request. Deployment note: this limiter is in-process, so limits assume a single uvicorn process; multiple workers each keep separate counters unless a shared store is added.
 *Why do we need it?* Login/signup/forgot/resend are the endpoints most abused for password guessing and email spam.
 *What breaks without it?* Brute-force and enumeration attempts are unthrottled.
 *Think of it as:* a turnstile that only lets each visitor through a few times a minute.
@@ -610,10 +622,10 @@ Part 3's plan feature; for now a stub router (`router.py`) exposing `POST /repos
 *Think of it as:* a meeting room that is booked and labelled but has no furniture yet.
 
 **What is `features/indexing`?**
-Part 2's live indexing feature. `POST /repos/{repo_id}/index` returns 202, sets `status="queued"` and schedules `app.tasks.run_index_pipeline` with FastAPI `BackgroundTasks`; it rejects a second start while the repo is `queued`/`cloning`/`indexing`. `GET .../index/status` returns `status`, `commit_sha` and `error_message`; `GET .../index/summary` returns the persisted file tree, symbol counts, modules, entry points and symbols with `file:line`, or 409 before `ready`. All three routes use `get_owned_repo`.
-*Why do we need it?* It is the API the frontend starts and polls while the pipeline runs.
-*What breaks without it?* There is no route to start or watch indexing.
-*Think of it as:* the washing-machine button wired to the machine, with a status light and a printed result sheet.
+Part 2's live indexing feature. `POST /repos/{repo_id}/index` returns 202, sets `status="queued"` and schedules `app.tasks.run_index_pipeline` with FastAPI `BackgroundTasks`; it rejects a second start while the repo is `queued`/`cloning`/`indexing`. `GET .../index/status` returns `status`, `commit_sha` and `error_message`; `GET .../index/summary` returns the persisted file tree, symbol counts, modules, entry points and symbols with `file:line`, or 409 before `ready`. `GET .../graph` reshapes the stored `build_graph()` output into the frontend `Graph` contract (module/class/function nodes with cluster, normalized centrality, `line`, `isEntry`, and typed edges/clusters), is capped at 300 nodes and 1000 edges with `truncated: true`, and also returns 409 before `ready`. All four routes use `get_owned_repo` (401 anonymous, 404 foreign/missing repo). `app/features/indexing/graph_out.py` owns the reshaping; the deterministic builder remains the only source of truth.
+*Why do we need it?* It is the API the frontend starts, polls and draws while the pipeline runs.
+*What breaks without it?* There is no route to start or watch indexing, and the workspace would have no real code graph.
+*Think of it as:* the washing-machine button wired to the machine, with a status light, a printed result sheet and a map of the parts.
 
 **What is `features/context`?**
 Part 3's context/query feature; for now a stub router exposing `POST /repos/{repo_id}/context` and `POST /repos/{repo_id}/query` (each a JSON `StubQueryRequest` of `{query, mode}`), returning `501` after an ownership check.
@@ -703,7 +715,7 @@ JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a
 **Depends on:** Layer 7 (HTTP API) — every data call goes through `src/api/`.
 **Used by:** end users.
 
-*Built and passing `npm run typecheck`, `npm run lint` (warnings only) and `npm run build`; no frontend test script is configured. The Part 2 routes in `src/api/galaxy.ts` are live and never use fallback data: `startIndex` calls `POST /repos/{id}/index`, `getIndexStatus` calls `GET .../index/status`, and `getIndexSummary` calls `GET .../index/summary`. The dashboard and workspace badges use the backend statuses `queued`/`cloning`/`indexing`/`ready`/`failed`, poll every 2.5s while active, and stop the interval on a terminal status or unmount. The Overview tab renders the real summary only after `ready`; the graph and the three fake query modes still use `src/mock/*`, with fake-evidence badges marked "Not implemented yet".*
+*Built and passing `npm run typecheck`, `npm run lint` (0 warnings) and `npm run build`; no frontend test script is configured. The Dashboard uses one cancellation-guarded `load()` for the initial fetch, Refresh and Retry; the workspace has a Retry for the repo load in addition to graph/summary/status error states. Static pages (landing, Developer, account settings) need no async states because they render local content or submit forms with toast/inline feedback; this is noted in `README.md`. The Part 2 routes in `src/api/galaxy.ts` are live and never use fallback data: `startIndex` calls `POST /repos/{id}/index`, `getIndexStatus` calls `GET .../index/status`, `getIndexSummary` calls `GET .../index/summary`, and `getGraph` calls `GET /repos/{id}/graph` unless `VITE_USE_MOCKS=true` (the opt-in demo default is `false` via `src/lib/env.ts` and `frontend/.env.example`). The dashboard and workspace badges use the backend statuses `queued`/`cloning`/`indexing`/`ready`/`failed`, poll every 2.5s while active, and stop the interval on a terminal status or unmount. The Overview tab renders the real summary only after `ready`; the workspace fetches the graph separately from the repo so a 409 while indexing does not blank the page, and shows explicit loading, error/Retry and empty states plus a "Graph capped for display" note when `truncated`. The three fake query modes still use `src/mock/*`, with fake-evidence badges marked "Not implemented yet".*
 
 *Current limitation:* Reader/Plan/Context still use local mock evidence and are labelled "Not implemented yet"; `RepoWorkspace` unwraps the `{data, demo}` result from `src/api/galaxy.ts` into the `{response, demo}` shape the panels consume, and a `PanelErrorBoundary` around the tab panel keeps any future panel crash from blanking the workspace.
 
@@ -728,7 +740,7 @@ The thin `fetch` wrapper: prefixes `VITE_API_URL`, JSON-encodes bodies, attaches
 *Think of it as:* the single reception line every request goes through before reaching the API.
 
 **What is `src/api/galaxy.ts`?**
-The API boundary. The Part 2 functions (`startIndex`, `getIndexStatus`, `getIndexSummary`) call the real routes directly and surface errors. For the endpoints the backend still returns `501` for (`plan`, `reader`, `context`, `query`, `agent/trace`, `evals`) it calls the real route first and, on failure that is not a `401`/`403`, returns typed mock data with `demo: true`; auth errors are rethrown. The catch is broad, so non-`401`/`403` failures of any kind (network, `500`) also become demo data. `getGraph` is always demo (no graph route exists yet).
+The API boundary. The Part 2 functions (`startIndex`, `getIndexStatus`, `getIndexSummary`, `getGraph`) call the real routes directly and surface errors; `getGraph` returns demo data only when `VITE_USE_MOCKS=true`, otherwise it calls `GET /repos/{id}/graph`. For the endpoints the backend still returns `501` for (`plan`, `reader`, `context`, `query`, `agent/trace`, `evals`) it calls the real route first and, on failure that is not a `401`/`403`, returns typed mock data with `demo: true`; auth errors are rethrown. The catch is broad, so non-`401`/`403` failures of any kind (network, `500`) also become demo data.
 *Why do we need it?* The workspace can show real Part 2 data now and still carry labelled placeholders for the unimplemented query modes.
 *What breaks without it?* The workspace would show errors everywhere until Parts 3–4 land.
 *Think of it as:* a placeholder actor who steps in only when the lead hasn't arrived, with a sign saying so.
@@ -781,19 +793,19 @@ A page listing every backend endpoint (method, path, Live vs Demo) and a live **
 
 **What it is:** Local orchestration, evaluation harness, and helper scripts.
 **Why it exists:** These support the runtime without being part of the runtime dependency chain.
-**Files in it:** `docker/docker-compose.yml` (empty), `evals/` (folders for agent, context_packer, data, plan_verifier — all `.gitkeep` only), `scripts/.gitkeep`.
+**Files in it:** `docker/.gitkeep` (the empty `docker-compose.yml` was removed; no Dockerfile yet), `evals/` (folders for agent, context_packer, data, plan_verifier — all `.gitkeep` only), `scripts/.gitkeep`.
 **Depends on:** the layers it wraps/tests (any).
 **Used by:** developers and CI.
 
-*Not implemented yet. `docker/docker-compose.yml` is empty and there is no Dockerfile. `evals/` and `scripts/` hold only `.gitkeep` files.*
+*Not implemented yet. `docker/` holds only `.gitkeep` — there is no compose file or Dockerfile. `evals/` and `scripts/` hold only `.gitkeep` files.*
 
 #### Study Notes for this layer
 
-**What is `docker/docker-compose.yml`?**
-A placeholder for running the stack via Docker Compose.
-*Why do we need it?* Consistent local/dev environments.
-*What breaks without it?* You run everything manually.
-*Think of it as:* a shipping container that packages the whole app.
+**What is `docker/`?**
+An empty placeholder folder (`.gitkeep` only) reserved for Docker orchestration; the zero-byte `docker-compose.yml` was removed because it described nothing.
+*Why do we need it?* It keeps the approved folder structure available for a real compose file and Dockerfile later.
+*What breaks without it?* Nothing runs today — the backend and Vite dev server are started directly; there is simply no one-command container setup.
+*Think of it as:* an empty shipping container parked in the yard, waiting for the app to be packed into it.
 
 **What is `evals/`?**
 The planned home for evaluation harnesses (agent, context packer, plan verifier) and eval data.
@@ -912,8 +924,8 @@ Browser ──DELETE /repos/{id}─────► router ──► 200 {message
 The index endpoint starts a durable job and returns immediately:
 
 1. **Start (Layer 7).** `POST /repos/{repo_id}/index` depends on `get_owned_repo` (401 without a token, 404 for a foreign/missing repo), rejects a repo already `queued`/`cloning`/`indexing` with 409, sets `status="queued"`, clears `error_message`, and adds `app.tasks.run_index_pipeline(repo.id)` to FastAPI `BackgroundTasks`.
-2. **Task (Layer 5 + 7).** `run_index_pipeline` opens its own DB session. On a commit-SHA cache hit it logs `Index cache hit for repo %d at %s` at INFO under the `app` logger and returns to `ready` without cloning. Otherwise it writes `cloning`, clones through `clone_workspace()`, stores `commit_sha`, writes `indexing`, then runs `index_repo()`, `build_graph()` and `build_chunks()`. It logs elapsed seconds per 10k Python lines, stores `index_summary`, and writes `ready`. Any exception writes `failed` with a readable `error_message` and removes the clone folder.
-3. **Poll (Layer 7).** `GET .../index/status` reads `status`, `commit_sha` and `error_message`. `GET .../index/summary` returns the stored overview only when `status == "ready"`; otherwise it is 409. Both use `get_owned_repo`.
+2. **Task (Layer 5 + 7).** `run_index_pipeline` opens its own DB session. On a commit-SHA cache hit it logs `Index cache hit for repo %d at %s` at INFO under the `app` logger and returns to `ready` without cloning. Otherwise it writes `cloning`, clones through `clone_workspace()`, stores `commit_sha`, writes `indexing`, then runs `index_repo()`, `build_graph()` and `build_chunks()`. Chunks and stored symbol docstrings/signatures pass through `redact_secrets()` first. It logs elapsed seconds per 10k Python lines, stores `index_summary`, and writes `ready`. Any exception writes `failed` with a readable `error_message` and removes the clone folder.
+3. **Poll (Layer 7).** `GET .../index/status` reads `status`, `commit_sha` and `error_message`. `GET .../index/summary` returns the stored overview only when `status == "ready"`; otherwise it is 409. `GET .../graph` maps the persisted `graph_nodes`/`graph_edges`/`centrality` into the frontend `Graph` shape, caps at 300 nodes / 1000 edges with `truncated`, and is also 409 until `ready`. All three use `get_owned_repo`.
 
 ```
 Browser ──POST /repos/{id}/index──► router ──► 202 {"status":"queued"}
@@ -924,6 +936,7 @@ Browser ──POST /repos/{id}/index──► router ──► 202 {"status":"qu
                                       │  exception → failed + error_message
 Browser ──GET .../index/status────► 200 {status, commit_sha, error_message}
 Browser ──GET .../index/summary───► 200 IndexSummaryOut | 409 not ready
+Browser ──GET .../graph──────────► 200 GraphOut {nodes, edges, clusters, truncated} | 409 not ready
 ```
 
 ### Stub request flow (Parts 3–4)
@@ -970,9 +983,9 @@ The React app in `frontend/` talks to Layer 7 through `src/api/`:
 1. **Boot (main.tsx).** `main.tsx` mounts the providers and `App.tsx` picks a route. `ProtectedRoute`/`GuestRoute` (`src/components/guards.tsx`) redirect based on the session held in `AuthContext` (tokens in `localStorage` via `src/lib/tokenStorage.ts`).
 2. **Auth.** Signup/login/verify call `src/api/auth.ts` -> `src/api/client.ts` -> the real `/auth/*` routes; a successful login stores the token pair in `AuthContext` and `/auth/me` restores the session on reload.
 3. **Dashboard.** `Dashboard` calls `listRepos()` (real `GET /repos`) and renders `RepoCard`s with status chips; the track modal calls `createRepo()` (real `POST /repos`). "Index" calls `startIndex()`. While any repo is `queued`/`cloning`/`indexing`, `listRepos()` is refreshed every 2.5s; the interval is cleared when no repo is active or the page unmounts. A `409` from start shows an "Already indexing" toast. Browser verification clicked an enabled Index button after the backend row became `cloning` and confirmed that exact toast.
-4. **Workspace.** `/repo/:id` loads the repo (`getRepo`, real) and the graph (`getGraph`, always demo), then polls `getIndexStatus()` every 2.5s only while active; `ready` or `failed` clears the interval, and unmount clears it too. `StageTimeline` renders queued→cloning→indexing→ready, shows `error_message` on `failed`, and Retry calls `startIndex()` again. The status badge uses the same six states on list and detail. `RepoWorkspace` is keyed by the route id so a new repo id gets fresh state; `effectiveStatus` and `currentRepo` are derived during render, and tab queries start from the tab click rather than an effect.
+4. **Workspace.** `/repo/:id` loads the repo (`getRepo`, real) and separately fetches the graph (`getGraph`, real `GET /repos/{id}/graph` unless `VITE_USE_MOCKS=true`), so a 409 while indexing does not blank the page. It polls `getIndexStatus()` every 2.5s only while active; `ready` or `failed` clears the interval, and `ready` also reloads the graph; unmount clears it too. The graph area shows explicit loading, error/Retry and empty states and a capped note when `truncated`. `StageTimeline` renders queued→cloning→indexing→ready, shows `error_message` on `failed`, and Retry calls `startIndex()` again. The status badge uses the same six states on list and detail. `RepoWorkspace` is keyed by the route id so a new repo id gets fresh state; `effectiveStatus` and `currentRepo` are derived during render, and tab queries start from the tab click rather than an effect.
 5. **Overview.** When status is `ready`, the Overview tab calls `getIndexSummary()` (real `GET .../index/summary`) and renders the file tree, symbol counts, modules, entry points and `file:line` symbol locations. While not ready it renders no symbols; loading, empty and error states are explicit, and `409`/network errors show a Retry action.
-6. **Mock modes.** `getGraph` and the ⌘K query modes for Reader/Plan/Context still come from `src/mock/*` and are labelled "Not implemented yet"; Plan colors nodes by check status, Reader highlights the reading order and Context shows the packed tiers. These do not affect Overview.
+6. **Mock modes.** Only when `VITE_USE_MOCKS=true` does `getGraph` come from `src/mock/*` (labelled demo); the ⌘K query modes for Reader/Plan/Context always come from `src/mock/*` and are labelled "Not implemented yet". Plan colors nodes by check status, Reader highlights the reading order and Context shows the packed tiers. These do not affect Overview.
 7. **Activity.** Every call through `client.ts` is appended to the in-memory log in `src/lib/apiLog.ts`, which the Developer page displays live.
 
 ```
@@ -988,48 +1001,49 @@ Browser (frontend/)
 
 ## Current Status
 
-Working now (verified by the current 266-test suite; see `docs/changes.md` for step history):
+Working now (verified by the current 301-test suite; see `docs/changes.md` for step history):
 - Settings & Configuration (`app/core/config.py`, `backend/.env`, `backend/.env.example`).
 - Database Core (`app/core/database.py`).
 - Data Models (`app/models/user.py`, `email_token.py`, `repo.py`, `__init__.py`).
 - Schema Migrations — `alembic.ini`, `alembic/env.py`, and three migrations creating `users`, `email_tokens`, `repos`, then adding `repos.commit_sha`, then adding `repos.error_message` and `repos.index_summary`.
 - HTTP API app factory (`app/main.py`): `create_app()`, CORS from `CORS_ORIGINS`, the slowapi limiter + 429 handler, global JSON error handlers, `GET /health`, the `GET /evals` stub, startup stale-clone sweep and stuck-repo recovery; runnable via `uvicorn app.main:app`.
 - Auth feature (`app/features/auth/router.py`, `app/features/auth/dependencies.py`): `POST /auth/signup`, `POST /auth/verify-email`, `POST /auth/resend-verification`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `POST /auth/forgot-password`, `POST /auth/reset-password`, `POST /auth/change-password`, `DELETE /auth/account`, and `GET /auth/me`, mounted in `main.py`.
-- Rate limiting (`app/core/ratelimit.py`, slowapi): per-IP limits on signup, login, forgot-password and resend-verification, configurable via `RATE_LIMIT_*`, returning 429 `http_error`.
+- Rate limiting (`app/core/ratelimit.py`, slowapi): per-IP limits on signup, login, forgot-password, resend-verification, verify-email, refresh, reset-password, change-password and logout, configurable via `RATE_LIMIT_*`, returning 429 `http_error`; the limiter assumes a single process.
+- Auth hardening: neutral signup/login/resend/forgot responses, a dummy password hash for unknown users, random `jti` plus atomic single-use refresh consumption, revoked refresh rows never reactivated, reset/change invalidating refresh and RESET tokens, `exp` required on JWTs, unverified users blocked by `get_current_user`, validation errors without `input`/`ctx`, and no tokenized links in SMTP fallback logs.
 - Repo-records feature (`app/features/repos/router.py`, `dependencies.py`): `POST /repos`, `GET /repos`, `GET /repos/{repo_id}`, and `DELETE /repos/{repo_id}`, all auth-required and scoped to the current user; new repos get `status="added"`, duplicates per user (case-insensitive) return 409, and another user's or a missing repo returns the same 404.
-- Indexing endpoints (`app/features/indexing/router.py`, `app/schemas/indexing.py`): `POST /repos/{repo_id}/index` (202, queued, 409 if already running), `GET .../index/status` (status, commit SHA, error message) and `GET .../index/summary` (file tree, symbol counts, modules, entry points, symbols with `file:line`, 409 before ready), all ownership-scoped.
+- Indexing endpoints (`app/features/indexing/router.py`, `app/schemas/indexing.py`, `graph_out.py`): `POST /repos/{repo_id}/index` (202, queued, 409 if already running), `GET .../index/status` (status, commit SHA, error message), `GET .../index/summary` (file tree, symbol counts, modules, entry points, symbols with `file:line`, 409 before ready) and `GET .../graph` (frontend `Graph` from the stored deterministic graph, capped with `truncated`, 409 before ready), all ownership-scoped.
 - Background pipeline (`app/tasks/__init__.py`): clone → AST index → graph → chunk in FastAPI `BackgroundTasks`, with `cloning`/`indexing`/`ready`/`failed` transitions, readable errors, clone cleanup, commit-SHA cache hit (INFO-logged and asserted in the regression test), and elapsed-seconds-per-10k-LOC logging. Startup marks repos stuck in `queued`/`cloning`/`indexing` as `failed`.
 - Part 3–4 stubs (`app/features/{plan,reader,context}/router.py`, `app/agent/router.py`, `GET /evals`): the remaining not-yet-implemented endpoints are registered. Repo-scoped ones verify ownership via `get_owned_repo` (401 / 404) and then return `501 {"status": "not_implemented"}`; `/evals` is public.
-- Safe clone (`app/pipeline/clone/`): `safe_clone` accepts only public GitHub HTTPS URLs, checks the remote size, shallow-clones under a timeout, records the commit SHA and returns a `CloneResult`; `clean_repo` deletes skipped directories and secret files; `CloneError` carries typed codes. Called by the indexing background task through `clone_workspace()`.
+- Safe clone (`app/pipeline/clone/`): `safe_clone` accepts only public GitHub HTTPS URLs, checks the remote size, shallow-clones under a timeout, records the commit SHA and returns a `CloneResult`; `clean_repo` deletes skipped directories and secret files; `redact_secrets` replaces credential-shaped values inside lines with `[REDACTED]` without changing line numbers; `CloneError` carries typed codes. Called by the indexing background task through `clone_workspace()`.
 - Clone cleanup (`app/pipeline/clone/cleanup.py`): `clone_workspace()` always deletes the scratch folder in `finally`, `remove_clone()` only deletes paths inside `CLONE_ROOT` and never follows symlinks, and `sweep_stale_clones()` removes stale child folders; the FastAPI lifespan runs one sweep on startup. Configured by `CLONE_STALE_MAX_AGE_SECONDS` (default 3600).
 - AST indexer (`app/pipeline/indexer/`): `parse_source`/`parse_file` use `ast` (never import or execute the code) to record symbols with exact `line_start`/`line_end`, signatures, docstrings and parents, plus imports and calls; `index_repo` walks a folder with ignore rules; `detect.py` finds test files and entry points. CLI: `python -m app.pipeline.indexer <folder>`. Covered by 24 tests.
 - Code graph (`app/pipeline/graph/`): `build_graph` produces module and symbol nodes with import and call edges, per-module `CentralityScore` (in-degree + PageRank), a breadth-first `reading_order` from entry points, and a Mermaid diagram. CLI: `python -m app.pipeline.graph <folder>`. Covered by 16 tests.
 - Chunking + SQLite cache (`app/pipeline/chunking/`): one `Chunk` per symbol with a tiktoken `cl100k_base` token count and a `too_large` flag above 2000 tokens; `ChunkStore` keeps `chunks` (keyed by commit SHA + chunk id) and `file_cache` (keyed by file + sha256) in `backend/data/chunks.db`, so unchanged files are not re-parsed. CLI: `python -m app.pipeline.chunking <folder> [--sha SHA] [--db PATH]`. Covered by 11 tests.
 - BM25 retrieval (`app/pipeline/retrieval/`): `BM25Index`/`load_index` rank one commit's stored chunks with `rank_bm25`, using a shared tokenizer that splits identifiers, and return `SearchResult`s with `file:line` and scores. CLI: `python -m app.pipeline.retrieval "<query>" [--k N] [--sha SHA] [--db PATH]`; batch runner: `python -m app.pipeline.retrieval.queries <file>`. Covered by 19 tests.
 - Retrieval baseline data: `backend/data/queries.txt` (10 queries: 5 exact names, 5 plain-word ideas) and `backend/data/bm25_failure_notes.md` (per-query correct answer, top 3, hit/miss, reason). Measured result: 7/10 hits at top-3; exact names 5/5 (ranks 2, 3, 3, 1, 1), plain words 2/5; three documented failure patterns (vocabulary mismatch, generic-word/short-chunk bias, usage chunks outranking definitions). Both files live under the gitignored `backend/data/`.
-- Email service (`app/core/email.py`): SMTP sending via `SMTP_*`/`EMAIL_FROM` with a console fallback when `SMTP_HOST` is unset, plus verification/reset link and email helpers.
+- Email service (`app/core/email.py`): SMTP sending via `SMTP_*`/`EMAIL_FROM` with a console fallback when `SMTP_HOST` is unset; the fallback logs only recipient, subject and a body-omitted warning, and verification/reset link helpers build the tokenized URLs.
 - Request/response schemas (`app/schemas/{common,auth,repo,indexing,stub}.py`) and the documented contract (`docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/postman_collection.json`).
-- Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing, JWT access/refresh with type-checked `decode_token`, and verify/reset email-token helpers.
-- `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map and docs links.
-- Tests (`backend/tests/`): **271 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_repos.py` 19, `test_stubs.py` 20, `test_schema_defaults.py` 2, `test_indexing.py` 10, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_retrieval.py` 19.
-- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `npm run typecheck`, `npm run lint` (4 pre-existing warnings, 0 errors; no hook warnings) and `npm run build` pass; no frontend test script is configured. Part 2 routes are live; the graph and Part 3–4 query modes remain labelled mock data.
+- Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing with a dummy hash for unknown-user login timing, JWT access/refresh with random refresh `jti`, required `exp` and type-checked `decode_token`, and verify/reset email-token helpers.
+- `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map, docs links, the N/A note for static frontend pages and a Known limitations section. `frontend/README.md` covers the Vite client's env vars, commands, API boundary and state handling.
+- Tests (`backend/tests/`): **301 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_batch1_hardening.py` 13, `test_repos.py` 19, `test_stubs.py` 20, `test_indexing.py` 10, `test_graph_endpoint.py` 5, `test_schema_defaults.py` 2, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_redaction.py` 12, `test_retrieval.py` 19.
+- Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `AuthContext` starts anonymous with no token, listens for `rt:auth-invalidated` from `client.ts`, and stops auth-guarded pollers on invalidation; `tokenStorage` bumps a generation on clear so in-flight refresh writes are ignored. `npm run typecheck`, `npm run lint` (0 warnings, 0 errors) and `npm run build` pass; no frontend test script is configured. `MiniGraphThumb` and `PlanPanel` avoid render-scope mutation, and the UI variant helpers stay internal so Fast Refresh works. Part 2 routes, including `/graph`, are live; `VITE_USE_MOCKS=false` by default, and only the Part 3–4 query modes remain labelled mock data.
 
 Not built yet (current absences, not a plan):
 - Retrieval is still CLI/library-only: there is no search route (`POST .../query` is a `501` stub), and no LLM/AI layer consumes the chunks.
 - Every analysis pass (`app/analysis/{reader_order,retrieval,plan_checks,packer}`) is an empty `__init__.py`.
 - AI layer (`app/ai/{embeddings,prompts,router}`) and the agent loop (`app/agent` holds only the `501` trace router): no embeddings, no LLM provider (Gemini included) and no API-key setting.
-- Eval set and harnesses (`evals/*` — `.gitkeep` only), Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile) and helper scripts (`scripts/` — `.gitkeep` only).
+- Eval set and harnesses (`evals/*` — `.gitkeep` only), Docker orchestration (`docker/` is `.gitkeep` only, no compose file or Dockerfile) and helper scripts (`scripts/` — `.gitkeep` only).
 
 Known open issues (current state):
 - Reader/Plan/Context still use mock evidence and are labelled "Not implemented yet"; their `{data, demo}` result is unwrapped before it reaches the panels, and a panel error boundary prevents a future crash from blanking the page.
 - The fallback in `src/api/galaxy.ts` still triggers on any non-`401`/`403` failure, so real network or `500` errors in the remaining mock routes render as fake evidence instead of an error state. Part 2 routes have no fallback.
 - `docs/api_contract.md`, `docs/openapi.json` and `docs/postman_collection.json` now describe the live Part 2 index routes (`202`/`200`/`409`/`500` where applicable) and their real schemas; only the Part 3–4 routes remain documented as `501` stubs.
 - No frontend test script or test files exist; verification is limited to typecheck, lint, production build and headless-browser checks.
-- Refresh is keep/reissue rather than guaranteed rotation: JWT `iat`/`exp` have second resolution, so a refresh in the same second returns the identical token string and reactivates its stored hash.
+- Refresh tokens carry a random `jti` and are consumed once under a conditional update, so even two refreshes in the same second issue different strings and reuse of the old token fails.
 - Clone URL allow-list: **fixed**. `safe_clone` (`backend/app/pipeline/clone/clone.py`) accepts public GitHub HTTPS URLs only (`https://github.com/<owner>/<repo>`, `.git` optional) and rejects every other scheme, host, credential, port, query string, fragment, leading `-` or whitespace-bearing URL with `CloneError("invalid_url")`. Local `file://` clones exist only in the test-only helper in `backend/tests/pipeline/test_clone.py`.
 - `frontend-redesign` has two commits that are not merged into `phase1`: `0df4d61 feat : done cloning process` and `f041b99 feat : Delete the repo content after final block` (clone cleanup work).
 
-Part 1 status: **backend-complete; frontend complete for the flows it wires up.** Auth, repos, the Part 3–4 stubs, the live Part 2 index API, the error contract, tests, README, and the OpenAPI/Postman docs exist and pass, and the frontend pages (including the repo workspace that opens from a dashboard repo card) are built. The frontend reaches the full auth surface: login links to forgot-password, reset-password reads the emailed token, and the navbar's user menu opens account settings for changing the password or deleting the account. The deterministic indexing path is connected to the API, the `Repo` rows and the Overview tab; BM25 retrieval is still CLI-only. The workspace graph and the Reader/Plan/Context modes remain labelled mock data. Note: to use the frontend against a local backend, add `http://localhost:5173` to `backend/.env`'s `CORS_ORIGINS` (the template defaults to port 3000).
+Part 1 status: **backend-complete; frontend complete for the flows it wires up.** Auth, repos, the Part 3–4 stubs, the live Part 2 index API, the error contract, tests, README, and the OpenAPI/Postman docs exist and pass, and the frontend pages (including the repo workspace that opens from a dashboard repo card) are built. The frontend reaches the full auth surface: login links to forgot-password, reset-password reads the emailed token, and the navbar's user menu opens account settings for changing the password or deleting the account. The deterministic indexing path is connected to the API, the `Repo` rows, the Overview tab and the workspace graph (`GET /repos/{id}/graph`, real by default); BM25 retrieval is still CLI-only. Only the Reader/Plan/Context modes remain labelled mock data. Note: to use the frontend against a local backend, add `http://localhost:5173` to `backend/.env`'s `CORS_ORIGINS` (the template defaults to port 3000).
 
 
 ## Running It Locally
@@ -1045,6 +1059,8 @@ source .venv/bin/activate
 pip install -r requirements.txt        # runtime deps
 pip install -r requirements-dev.txt    # also pulls pytest + httpx for tests
 ```
+
+`requirements-dev.txt` was verified in a fresh virtual environment: installing it resolved every pinned dependency and `python -m pytest -q` reported 301 passing there as well.
 
 Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
@@ -1069,17 +1085,20 @@ Run the API (from `backend/`, venv active):
 uvicorn app.main:app --reload        # serves http://127.0.0.1:8000
 curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
 ```
-Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `indexing`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout` (optional `refresh_token` body revokes that token server-side), `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2 routes are live under `/repos/{repo_id}/index` (`POST` 202 `{"status":"queued","message":"Indexing queued."}`, 409 when already running; `GET .../status` 200; `GET .../summary` 200 only when ready, otherwise 409/500 for invalid stored data). The Part 3–4 routes (plan, reader, context, query, agent/trace, evals) remain registered stubs returning `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. To see verification/reset links locally, leave `SMTP_HOST` empty in `.env`: the messages are logged to the server console with their `http://localhost:3000/...?token=...` links.
+Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `indexing`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout` (optional `refresh_token` body revokes that token server-side), `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2 routes are live under `/repos/{repo_id}/index` (`POST` 202 `{"status":"queued","message":"Indexing queued."}`, 409 when already running; `GET .../status` 200; `GET .../summary` 200 only when ready, otherwise 409/500 for invalid stored data) and `/repos/{repo_id}/graph` (frontend `Graph` mapped from the stored deterministic graph, capped at 300 nodes / 1000 edges with `truncated`, 409 before ready). The Part 3–4 routes (plan, reader, context, query, agent/trace, evals) remain registered stubs returning `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. With `SMTP_HOST` empty in `.env`, the fallback logs only the recipient and subject; raw verification/reset tokens are never printed, so local verification uses the dev flow described in the auth layer notes instead of reading links from logs.
 
 Run the tests (from `backend/`, venv active):
 ```bash
-python -m pytest tests/ -q                  # 271 passing (auth/repos/stubs + pipeline)
-python -m pytest tests/test_security.py -q  # 18
-python -m pytest tests/test_auth.py -q      # 37
-python -m pytest tests/test_repos.py -q     # 19
-python -m pytest tests/test_stubs.py -q     # 20
-python -m pytest tests/test_indexing.py -q  # 10
-python -m pytest tests/pipeline/ -q         # 140 (clone 74, cleanup 16, indexer 24, graph 16, chunking 11, retrieval 19)
+python -m pytest tests/ -q                        # 301 passing
+python -m pytest tests/test_security.py -q        # 18
+python -m pytest tests/test_auth.py -q            # 42
+python -m pytest tests/test_batch1_hardening.py -q # 13
+python -m pytest tests/test_repos.py -q           # 19
+python -m pytest tests/test_stubs.py -q           # 20
+python -m pytest tests/test_indexing.py -q        # 10
+python -m pytest tests/test_graph_endpoint.py -q  # 5
+python -m pytest tests/test_schema_defaults.py -q # 2
+python -m pytest tests/pipeline/ -q               # 172 (clone 74, cleanup 16, indexer 24, graph 16, chunking 11, redaction 12, retrieval 19)
 ```
 
 Run the deterministic pipeline (from `backend/`, venv active; output to stdout only):
@@ -1090,34 +1109,40 @@ python -m app.pipeline.chunking ../some-folder --sha <commit-sha>
 python -m app.pipeline.retrieval "parse_github_url" -k 5
 python -m app.pipeline.retrieval.queries data/queries.txt
 ```
-The chunk store defaults to `backend/data/chunks.db` (gitignored; `--db` overrides it). Retrieval's `--sha` defaults to the commit with the most stored chunks. `safe_clone` has no CLI: it is a library call that takes a `CloneConfig(root=..., max_size_mb=..., timeout_seconds=...)`, and no endpoint invokes it. None of these commands updates the `repos` table or the API.
+The chunk store defaults to `backend/data/chunks.db` (gitignored; `--db` overrides it). Retrieval's `--sha` defaults to the commit with the most stored chunks. `safe_clone` has no CLI: it is a library call that takes a `CloneConfig(root=..., max_size_mb=..., timeout_seconds=...)`; the HTTP API invokes it through `app.tasks.run_index_pipeline` inside `clone_workspace()`. None of these commands updates the `repos` table or the API.
 
 Run the frontend (from `frontend/`, Node 20+):
 ```bash
 npm install
-cp .env.example .env        # optional; VITE_API_URL defaults to http://localhost:8000
+cp .env.example .env        # optional; VITE_API_URL defaults to http://localhost:8000, VITE_USE_MOCKS to false
 npm run dev                 # Vite dev server on http://localhost:5173
 npm run typecheck           # tsc -b --noEmit
 npm run build               # production build (3D canvas + Mermaid are code-split)
 npm run lint                # oxlint
 ```
-Start the backend first (from `backend/`, venv active) with `uvicorn app.main:app --reload`. The Vite dev server runs on port **5173**, so add `http://localhost:5173` (and `http://127.0.0.1:5173`) to `CORS_ORIGINS` in `backend/.env` or the browser will block the API calls. The workspace's graph, reader, plan and context views show a "Demo data" badge until the Part 2–4 endpoints stop returning `501`.
+Start the backend first (from `backend/`, venv active) with `uvicorn app.main:app --reload`. The Vite dev server runs on port **5173**, so add `http://localhost:5173` (and `http://127.0.0.1:5173`) to `CORS_ORIGINS` in `backend/.env` or the browser will block the API calls. The workspace's reader, plan and context views show a "Demo data" badge until the Part 3–4 endpoints stop returning `501`; the graph is real unless `VITE_USE_MOCKS=true`.
+
+## Current verification
+
+- Backend (venv active, from `backend/`): `python -m pytest -q` → 301 passed, 10 warnings; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`.
+- Real Part 2 API E2E on a temporary migrated database and clone root against `https://github.com/keleshev/schema`: verified user → login → `POST /repos` → `POST /repos/{id}/index` (202) → status → summary → graph. Pre-ready summary and graph returned 409; final status was `ready`. Summary numbers: 20 file-tree entries, 4 files indexed/cached, 216 symbols (22 class / 142 function / 52 method), 3,335 lines of code, 220 graph nodes, 266 graph edges, 4 centrality rows, 1 entry point, `index_seconds` 1.953 and `seconds_per_10k_loc` 5.856. The graph endpoint returned 220 nodes, 266 edges, 2 clusters and `truncated: false`. FastAPI's `TestClient` runs background tasks before returning the 202, so polling observed only the terminal `ready` status.
+- Frontend: `npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeds with only the pre-existing large-chunk advisory. No browser automation runner is installed; UI confirmation is manual.
 
 ## Where You Can Help
 
-- **Layer 8, `frontend/`:** the client is built; when a Part 2–4 endpoint stops returning `501`, remove its entry from the mock fallback in `src/api/galaxy.ts` (and its "Demo data" badge will disappear automatically) or replace the `501` handling with the real shape.
-- **Layer 7, `app/main.py`:** the app factory exists and now includes all routers (auth, repos, and the Part 2–4 stubs) — replace stub routers with real ones and extend middleware as features are built.
+- **Layer 8, `frontend/`:** the client is built; when a Part 3–4 endpoint stops returning `501`, remove its entry from the mock fallback in `src/api/galaxy.ts` (and its "Demo data" badge will disappear automatically) or replace the `501` handling with the real shape.
+- **Layer 7, `app/main.py`:** the app factory includes auth, repo CRUD, live Part 2 indexing and the Part 3–4 stubs — replace the remaining stubs with real routers and extend middleware as features are built.
 - **Layer 7, `app/security/`:** helpers exist and are tested — extend them (e.g. token rehash checks) as auth needs grow.
 - **Layer 7, `app/schemas/`:** schemas for Part 1 exist (plus `stub.py`) — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`/`docs/openapi.json`/`docs/postman_collection.json`) when endpoints change.
 - **Layer 7, `app/features/auth/`:** the full Part 1 auth surface (signup/verify/resend/login/refresh/logout/forgot/reset/change/delete/me) plus rate limiting is built; refresh tokens are stored as SHA-256 hashes and revoked on logout, password change and account deletion; `get_current_user` is reused by the repos feature and every repo-scoped stub.
 - **Layer 7, `app/core/ratelimit.py`:** limits exist for the abuse-prone auth endpoints — add them to other sensitive endpoints and consider a shared storage (Redis) for multi-process deploys.
 - **Layer 7, `app/features/repos/`:** repo CRUD plus `get_owned_repo` are built; Part 2 flips `status` through the pipeline instead of leaving it at `"added"`.
-- **Layer 7, stub routers:** `app/features/{indexing,plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 2–4 (they already enforce ownership).
+- **Layer 7, stub routers:** `app/features/{plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 3–4 (they already enforce ownership). `app/features/indexing/router.py` is live.
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
-- **Layer 5, `app/pipeline/`:** clone (with cleanup), indexer, graph, chunking and retrieval exist as tested library + CLI code. What is missing is the HTTP wiring (endpoints, status tracking, `Repo.commit_sha`) and the `pipeline/cache` package; wire `safe_clone` into a `Repo` row and run each pipeline step inside `clone_workspace()` so scratch folders are removed as soon as a run finishes.
+- **Layer 5, `app/pipeline/`:** clone (with cleanup and redaction), indexer, graph, chunking, BM25 retrieval and `pipeline/cache` are tested library + CLI code, now wired to `app.tasks.run_index_pipeline` and the Part 2 endpoints. Next work is additional retrieval endpoints or more languages, not basic HTTP wiring.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
-- **Layer 9:** fill `docker/docker-compose.yml` and add a Dockerfile; stand up the `evals/` harnesses.
-- **Tests:** `test_security.py`, `test_auth.py`, `test_repos.py`, `test_stubs.py` and `tests/pipeline/*` exist (265 passing) — extend them (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, real pipeline endpoints).
+- **Layer 9:** add a real `docker/docker-compose.yml` and a Dockerfile; stand up the `evals/` harnesses.
+- **Tests:** the backend suite has 301 passing tests covering security, auth hardening, repos, stubs, indexing/graph endpoints and `tests/pipeline/*` — extend it (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, browser-level UI checks).
 
 ## How To Contribute
 

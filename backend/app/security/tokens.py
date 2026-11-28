@@ -1,4 +1,5 @@
 import enum
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -19,7 +20,10 @@ class TokenError(Exception):
 
 
 def _create_token(
-    subject: str | int, token_type: TokenType, expires_delta: timedelta
+    subject: str | int,
+    token_type: TokenType,
+    expires_delta: timedelta,
+    extra: dict[str, Any] | None = None,
 ) -> str:
     now = datetime.now(timezone.utc)
     payload = {
@@ -28,6 +32,8 @@ def _create_token(
         "iat": int(now.timestamp()),
         "exp": int((now + expires_delta).timestamp()),
     }
+    if extra:
+        payload.update(extra)
     return jwt.encode(payload, get_settings().SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -41,7 +47,10 @@ def create_access_token(subject: str | int) -> str:
 def create_refresh_token(subject: str | int) -> str:
     settings = get_settings()
     return _create_token(
-        subject, TokenType.REFRESH, timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        subject,
+        TokenType.REFRESH,
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        {"jti": secrets.token_urlsafe(16)},
     )
 
 
@@ -53,7 +62,10 @@ def decode_token(token: str, expected_type: TokenType | str) -> dict[str, Any]:
     )
     try:
         payload = jwt.decode(
-            token, get_settings().SECRET_KEY, algorithms=[ALGORITHM]
+            token,
+            get_settings().SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp"]},
         )
     except jwt.ExpiredSignatureError as exc:
         raise TokenError("Token has expired") from exc

@@ -9,17 +9,16 @@ export function MiniGraphThumb({
   className?: string
 }) {
   const scene = useMemo(() => {
-    let state = seed * 9301 + 49297
-    const rand = () => {
-      state = (state * 9301 + 49297) % 233280
-      return state / 233280
-    }
-    const count = 9 + Math.floor(rand() * 4)
+    // Pure, index-seeded values: no render-scope variable is reassigned, so
+    // the decorative thumbnail stays deterministic and Fast Refresh-safe.
+    const rand = (index: number) =>
+      ((seed * 9301 + (index + 1) * 49297) % 233280) / 233280
+    const count = 9 + Math.floor(rand(0) * 4)
     const nodes = Array.from({ length: count }, (_, i) => ({
       id: i,
-      x: 12 + rand() * 76,
-      y: 12 + rand() * 52,
-      r: 2 + rand() * 3,
+      x: 12 + rand(1 + i * 3) * 76,
+      y: 12 + rand(2 + i * 3) * 52,
+      r: 2 + rand(3 + i * 3) * 3,
       hub: i === 0,
     }))
     const edges: [number, number][] = []
@@ -27,7 +26,7 @@ export function MiniGraphThumb({
       edges.push([0, i])
     }
     for (let i = 0; i < count; i += 1) {
-      if (rand() > 0.65 && i + 1 < count) edges.push([i, i + 1])
+      if (rand(100 + i) > 0.65 && i + 1 < count) edges.push([i, i + 1])
     }
     return { nodes, edges }
   }, [seed])

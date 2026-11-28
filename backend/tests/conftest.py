@@ -16,6 +16,11 @@ os.environ["RATE_LIMIT_LOGIN"] = "100000/minute"
 os.environ["RATE_LIMIT_SIGNUP"] = "100000/minute"
 os.environ["RATE_LIMIT_FORGOT_PASSWORD"] = "100000/minute"
 os.environ["RATE_LIMIT_RESEND_VERIFICATION"] = "100000/minute"
+os.environ["RATE_LIMIT_REFRESH"] = "100000/minute"
+os.environ["RATE_LIMIT_VERIFY_EMAIL"] = "100000/minute"
+os.environ["RATE_LIMIT_RESET_PASSWORD"] = "100000/minute"
+os.environ["RATE_LIMIT_CHANGE_PASSWORD"] = "100000/minute"
+os.environ["RATE_LIMIT_LOGOUT"] = "100000/minute"
 
 import pytest
 from fastapi.testclient import TestClient

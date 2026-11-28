@@ -1,4 +1,5 @@
 import { ApiError, request } from '@/api/client'
+import { env } from '@/lib/env'
 import {
   detectIntent,
   mockGraph,
@@ -20,7 +21,8 @@ import type {
  * The boundary for endpoints the backend still returns 501 for (plan, reader,
  * context, query, agent trace, evals). Those calls hit the real FastAPI route
  * first and fall back to typed mock data, with `demo: true` so the UI labels it.
- * The Part 2 index endpoints are live and never fall back to mock data.
+ * The Part 2 index and graph endpoints are live and never fall back to mock
+ * data; the graph only uses mock data when VITE_USE_MOCKS=true.
  *
  * Static analysis decides what is true. AI only retrieves and explains.
  */
@@ -55,9 +57,15 @@ function resolveIntent(query: string, mode: QueryMode): QueryIntent {
   return mode === 'auto' ? detectIntent(query) : mode
 }
 
-/** No dedicated graph route exists yet; this is always demo data. */
-export function getGraph(_repoId: number): Promise<DemoData<Graph>> {
-  return Promise.resolve({ data: mockGraph, demo: true })
+/** GET /repos/{id}/graph — the deterministic graph, or explicit demo data. */
+export function getGraph(repoId: number): Promise<DemoData<Graph>> {
+  if (env.USE_MOCKS) {
+    return Promise.resolve({ data: mockGraph, demo: true })
+  }
+  return request<Graph>(`/repos/${repoId}/graph`).then((data) => ({
+    data,
+    demo: false,
+  }))
 }
 
 /**
