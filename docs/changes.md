@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Backend test isolation from local .env
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** no files created; modified `backend/tests/conftest.py`, `backend/tests/test_verification_flag.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the test suite now sets its entire environment before importing app settings or app modules, including verification mode, deployment mode, a temporary SQLite database, test-only secrets, SMTP/email values and high rate limits. It also points Pydantic Settings at a deliberately missing env file, so a developer's local `.env` cannot influence any test. Tests that need verification off now opt out explicitly in their own fixture. No application code, API contract or response shape was changed.
+- **New commands / env variables / endpoints / migrations:** none. Test-only settings are set inside `backend/tests/conftest.py`.
+- **Verification:** `python -m pytest -q` run three times — local `.env` with verification disabled, local `.env` with verification enabled, and no `.env` present — each produced **307 passed**. The original `.env` was restored byte-for-byte after the checks.
+- **Known issues / TODOs:** none from this change.
+
+---
+
 ## UI polish Task 5: responsive verification and token docs
 
 - **Date:** 2026-11-28

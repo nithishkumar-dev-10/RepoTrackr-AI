@@ -13,6 +13,8 @@ EMAIL = "user@example.com"
 
 @pytest.fixture()
 def verification_disabled(monkeypatch):
+    # Explicit per-test opt-out: no test relies on a local .env being off.
+    monkeypatch.setenv("REQUIRE_EMAIL_VERIFICATION", "false")
     monkeypatch.setattr(get_settings(), "REQUIRE_EMAIL_VERIFICATION", False)
 
 
