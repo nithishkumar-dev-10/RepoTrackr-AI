@@ -1,9 +1,10 @@
 import { addApiLog } from '@/lib/apiLog'
 import { env } from '@/lib/env'
 import {
-  clearTokens,
+  AUTH_INVALIDATED_EVENT,
   getAccessToken,
   getRefreshToken,
+  getTokenGeneration,
   setTokens,
 } from '@/lib/tokenStorage'
 import type { ApiErrorBody, ApiFieldError, TokenResponse } from '@/types'
@@ -40,7 +41,11 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 let refreshPromise: Promise<boolean> | null = null
 
-async function doRefresh(): Promise<boolean> {
+function notifyAuthInvalidated(): void {
+  window.dispatchEvent(new Event(AUTH_INVALIDATED_EVENT))
+}
+
+async function doRefresh(startedGeneration: number): Promise<boolean> {
   const refreshToken = getRefreshToken()
   if (!refreshToken) return false
   const started = performance.now()
@@ -59,10 +64,14 @@ async function doRefresh(): Promise<boolean> {
     })
     if (!res.ok) return false
     const data = (await res.json()) as TokenResponse
-    setTokens({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-    })
+    if (startedGeneration !== getTokenGeneration()) return false
+    setTokens(
+      {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+      },
+      startedGeneration,
+    )
     return true
   } catch {
     return false
@@ -104,14 +113,16 @@ export async function request<T>(
   try {
     res = await send()
     if (res.status === 401 && retryOn401 && auth) {
-      refreshPromise ??= doRefresh().finally(() => {
+      const startedGeneration = getTokenGeneration()
+      refreshPromise ??= doRefresh(startedGeneration).finally(() => {
         refreshPromise = null
       })
       const refreshed = await refreshPromise
-      if (refreshed) {
-        res = await send()
+      if (!refreshed) {
+        notifyAuthInvalidated()
       } else {
-        clearTokens()
+        res = await send()
+        if (res.status === 401) notifyAuthInvalidated()
       }
     }
   } catch (error) {

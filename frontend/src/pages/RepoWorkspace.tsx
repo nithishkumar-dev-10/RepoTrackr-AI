@@ -78,6 +78,7 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
   const [graphError, setGraphError] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
 
   const [indexStatus, setIndexStatus] = useState<IndexRunStatus | null>(null)
   const [statusError, setStatusError] = useState('')
@@ -167,7 +168,7 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
     return () => {
       cancelled = true
     }
-  }, [repoId, fetchSummary, fetchGraph])
+  }, [repoId, reloadKey, fetchSummary, fetchGraph])
 
   // Real status poll: every 2.5s only while queued/cloning/indexing.
   // The interval is always cleared on unmount or on a terminal status.
@@ -368,9 +369,24 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
           <div className="grid h-full place-items-center bg-canvas p-6 text-center">
             <div className="space-y-3">
               <p className="text-sm text-slate-300">{error}</p>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/dashboard">Back to dashboard</Link>
-              </Button>
+              <div className="flex justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLoading(true)
+                    setError('')
+                    setGraph(null)
+                    setGraphError('')
+                    setReloadKey((key) => key + 1)
+                  }}
+                >
+                  Retry
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/dashboard">Back to dashboard</Link>
+                </Button>
+              </div>
             </div>
           </div>
         ) : graphError ? (

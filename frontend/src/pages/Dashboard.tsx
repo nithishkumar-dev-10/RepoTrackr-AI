@@ -25,7 +25,7 @@ function greeting(date = new Date()): string {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, status: authStatus } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
 
@@ -35,23 +35,23 @@ export default function Dashboard() {
   const [modalOpen, setModalOpen] = useState(false)
   const [indexing, setIndexing] = useState<Set<number>>(new Set())
 
-  const fetchRepos = useCallback(async () => {
+  // One loader for the first render, the Refresh button and the Retry action.
+  // `alive` guards against an unmounted or superseded request writing state.
+  const load = useCallback(async (alive: () => boolean = () => true) => {
     try {
       const data = await listRepos()
+      if (!alive()) return
       setRepos(data.repos)
+      setError('')
     } catch (err) {
+      if (!alive()) return
       setError(
         err instanceof Error ? err.message : 'Could not load your repositories.',
       )
+    } finally {
+      if (alive()) setLoading(false)
     }
   }, [])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    await fetchRepos()
-    setLoading(false)
-  }, [fetchRepos])
 
   // Silent refresh for badge polling; does not flash the page skeleton.
   const refreshStatuses = useCallback(async () => {
@@ -65,34 +65,31 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      try {
-        const data = await listRepos()
-        if (!cancelled) setRepos(data.repos)
-      } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : 'Could not load your repositories.',
-          )
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
+    void (async () => {
+      // All state writes happen after the awaited fetch, so this effect only
+      // synchronizes with the API and never triggers a synchronous re-render.
+      await load(() => !cancelled)
     })()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [load])
 
   // Poll every 2.5s while any repo is queued/cloning/indexing; cleanup on
   // unmount and as soon as no repo needs polling.
   useEffect(() => {
-    if (loading || !repos.some((repo) => isRepoStatusActive(repo.status))) return
+    if (
+      authStatus !== 'authenticated' ||
+      loading ||
+      !repos.some((repo) => isRepoStatusActive(repo.status))
+    ) {
+      return
+    }
     const timer = window.setInterval(() => {
       void refreshStatuses()
     }, 2500)
     return () => window.clearInterval(timer)
-  }, [loading, repos, refreshStatuses])
+  }, [authStatus, loading, repos, refreshStatuses])
 
   const name = useMemo(() => user?.email?.split('@')[0] ?? 'there', [user])
 
@@ -153,7 +150,11 @@ export default function Dashboard() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => void load()}
+              onClick={() => {
+                setLoading(true)
+                setError('')
+                void load()
+              }}
               disabled={loading}
             >
               <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
@@ -190,7 +191,15 @@ export default function Dashboard() {
             <Alert variant="destructive">
               <AlertDescription className="flex items-center justify-between gap-4">
                 <span>{error}</span>
-                <Button variant="outline" size="sm" onClick={() => void load()}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setLoading(true)
+                    setError('')
+                    void load()
+                  }}
+                >
                   Retry
                 </Button>
               </AlertDescription>

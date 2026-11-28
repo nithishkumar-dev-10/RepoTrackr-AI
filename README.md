@@ -25,7 +25,9 @@ The project is built in four parts (see `docs/RepoTrackr-AI-Execution-Plan.md`).
 - Stub endpoints for Parts 2–4 are registered so the frontend can wire them now; each returns `501 {"status": "not_implemented"}`.
 - Consistent JSON error envelope, CORS, and Swagger docs at `/docs`.
 
-The frontend (`frontend/`) lives in this repository: landing, signup/login/verify-email/forgot-password/reset-password, account settings, dashboard, repo workspace and Developer page. It calls the live `/auth` and `/repos` routes; the Part 2–4 views show a "Demo data" badge while those endpoints return `501`.
+The frontend (`frontend/`) lives in this repository: landing, signup/login/verify-email/forgot-password/reset-password, account settings, dashboard, repo workspace and Developer page. It calls the live `/auth`, `/repos` and Part 2 index/graph routes; the Part 3–4 views show a "Demo data" badge while those endpoints return `501`.
+
+Loading, error, Retry and empty states are implemented on the two data-driven pages: the Dashboard (repository list) and the repo workspace (repository, index status/summary and graph). On static pages — landing, Developer and account settings — those states are **N/A**: they render local content or submit a form immediately, with success/failure surfaced by toasts and inline form messages rather than an async list to reload.
 
 ## Setup from scratch
 

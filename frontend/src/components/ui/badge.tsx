@@ -37,5 +37,7 @@ function Badge({ className, variant, ...props }: BadgeProps) {
   )
 }
 
-export { Badge, badgeVariants }
+// Only the component is exported so React Fast Refresh can preserve state.
+// `badgeVariants` is internal; `BadgeProps` covers callers that need variants.
+export { Badge }
 export type { BadgeProps }

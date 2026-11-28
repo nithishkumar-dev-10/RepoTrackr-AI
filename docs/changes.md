@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 5: frontend states, clean lint, static-page note
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/RepoWorkspace.tsx`, `frontend/src/components/dashboard/MiniGraphThumb.tsx`, `frontend/src/components/workspace/PlanPanel.tsx`, `frontend/src/components/ui/button.tsx`, `frontend/src/components/ui/badge.tsx`, `README.md`, `docs/project_summary.md`, `docs/changes.md`; folded in the pre-existing Phase B frontend hardening edits to `frontend/src/api/client.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/lib/tokenStorage.ts`; no files created or deleted.
+- **What changed and why:** the Dashboard now has a single cancellation-guarded `load()` used by the first render, Refresh and Retry, with explicit skeleton, error/Retry and empty states; `RepoWorkspace` gained a Retry for the repository load alongside the existing graph/summary/status states. The four lint warnings are gone: `MiniGraphThumb` uses pure index-seeded values instead of mutating render state, `PlanPanel` uses prefix sums instead of a mutated cursor, and `button.tsx`/`badge.tsx` no longer export their `cva` variant helpers so React Fast Refresh can preserve component state (unused externally; prop types still exported). `README.md` states that loading/error/Retry/empty states are N/A on static pages (landing, Developer, account settings), which use toasts and inline form feedback. The earlier frontend auth hardening (401 refresh-retry with `rt:auth-invalidated` and token-generation guards, reflected in `AuthContext`/`client.ts`/`tokenStorage.ts`) was preserved here.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` passed; `npm run lint` → **0 warnings, 0 errors**; `npm run build` → succeeded (`✓ built in 649ms`, only the pre-existing large-chunk advisory). Backend tests were unchanged from Task 4 (301 passing).
+- **Known issues / TODOs:** no frontend test runner is configured, so state transitions are verified by typecheck/lint/build and review only. Vite still reports large chunks (elk/Graph3D) as an advisory.
+
+---
+
 ## Audit closeout - Task 4: machine-readable unverified-login code + backend auth hardening
 
 - **Date:** 2026-11-28

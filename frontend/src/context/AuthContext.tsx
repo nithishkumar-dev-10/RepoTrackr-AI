@@ -9,7 +9,12 @@ import {
 import type { ReactNode } from 'react'
 
 import * as authApi from '@/api/auth'
-import { clearTokens, getAccessToken, setTokens } from '@/lib/tokenStorage'
+import {
+  AUTH_INVALIDATED_EVENT,
+  clearTokens,
+  getAccessToken,
+  setTokens,
+} from '@/lib/tokenStorage'
 import type { User } from '@/types'
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
@@ -53,9 +58,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser])
 
   useEffect(() => {
-    if (!getAccessToken()) return
     let cancelled = false
     ;(async () => {
+      if (!getAccessToken()) {
+        if (!cancelled) {
+          setUser(null)
+          setStatus('anonymous')
+        }
+        return
+      }
       try {
         const me = await authApi.me()
         if (!cancelled) {
@@ -73,6 +84,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    const handleInvalidation = () => {
+      clearTokens()
+      setUser(null)
+      setStatus('anonymous')
+    }
+    window.addEventListener(AUTH_INVALIDATED_EVENT, handleInvalidation)
+    return () => window.removeEventListener(AUTH_INVALIDATED_EVENT, handleInvalidation)
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {
