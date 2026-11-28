@@ -367,9 +367,9 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
   return (
     <div
       ref={containerRef}
-      className="flex h-[calc(100svh-3.5rem)] flex-col overflow-hidden lg:flex-row"
+      className="flex min-h-[calc(100svh-3.5rem)] flex-col lg:h-[calc(100svh-3.5rem)] lg:flex-row lg:overflow-hidden"
     >
-      <div className="relative h-[45svh] shrink-0 lg:h-auto lg:flex-1">
+      <div className="relative h-[50svh] min-h-[300px] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1">
         {loading || graphLoading ? (
           <div className="grid h-full place-items-center bg-canvas text-slate-400">
             <Loader2 className="size-6 animate-spin" />

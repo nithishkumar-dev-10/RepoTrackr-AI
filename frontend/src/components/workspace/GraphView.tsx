@@ -31,6 +31,7 @@ function Toggle<T extends string>({
           key={id}
           type="button"
           aria-pressed={value === id}
+          aria-label={label}
           onClick={() => onChange(id)}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',

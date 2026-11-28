@@ -29,6 +29,10 @@ npm run build       # production build into dist/
 
 There is no frontend test runner configured. Typecheck, lint and build are the automated checks.
 
+## UI design tokens
+
+`src/index.css` is the canonical source for colors, tints, radius, elevation and Tailwind utilities; `src/lib/designTokens.ts` mirrors the palette for SVG/WebGL fills that CSS variables cannot reach. Status colors and node-type hues derive from the same hue families, `Card accent` / `AccentIcon` provide tinted surfaces, and `src/styles/glow.css` defines the shared glow/progress effects. Edit the CSS and TS token files together.
+
 ## API boundary
 
 `src/api/client.ts` is the single fetch wrapper: it prefixes `VITE_API_URL`, attaches the bearer token, retries once after a refresh on 401, parses the shared `{"error": {"code", "message"}}` envelope into `ApiError`, and logs each call for the Developer page. Auth failures dispatch `rt:auth-invalidated` so `AuthContext` returns to `anonymous` and stops protected pollers.

@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## UI polish Task 5: responsive verification and token docs
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** no files created; modified `frontend/src/pages/RepoWorkspace.tsx`, `frontend/src/components/workspace/GraphView.tsx`, `frontend/src/components/workspace/ModeTabs.tsx`, `frontend/README.md`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** reviewed the three target widths from the CSS/layout source. At 1440px the graph fills the remaining width beside the 440px side panel; at 1024px the same `lg` split stays usable because the panel is fixed while the graph flexes. The workspace no longer locks to viewport height below `lg`: the graph keeps a 50svh/300px-minimum canvas and the side panel scrolls beneath it. Graph toolbars wrap and the workspace mode tabs scroll instead of clipping at 390px. Graph toggles now expose their labels to screen readers. `frontend/README.md` gained a short UI design tokens note pointing to the CSS token source, its TypeScript mirror, card accents and glow variables. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory). Full backend suite: 307 passed with the verification-enabled environment; a local dev override that disables verification makes 83 legacy auth/repo tests fail, so the verification-enabled run is the recorded count. No browser runner is configured, so hover/focus and pixel-level 1440/1024/390 checks still need a real browser.
+- **Known issues / TODOs:** no automated frontend visual assertions or responsive screenshot runner; the CSS token map and `designTokens.ts` still need to be edited together.
+
+---
+
 ## UI polish Task 4: dashboard cards and landing/auth polish
 
 - **Date:** 2026-11-28
