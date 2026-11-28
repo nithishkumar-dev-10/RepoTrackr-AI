@@ -177,7 +177,7 @@ RepoTrackr-AI/
 │       ├── mock/                    # Typed mock data for the 501 endpoints
 │       ├── types/                   # Wire + UI types (auth, repo, graph, query, pipeline, api)
 │       ├── lib/                     # env, tokenStorage, motion, validation, authErrors, github,
-│       │                            #   graphLayout, graphVisuals, planStatus, endpoints, apiLog, utils
+│       │                            #   graphLayout, graphVisuals, designTokens, planStatus, endpoints, apiLog, utils
 │       ├── context/                 # AuthContext, ToastContext
 │       ├── components/              # shared (GlowCard, GlowButton, GlowRipple, …) + ui/ (Radix)
 │       │                            #   + landing/ + auth/ + dashboard/ + workspace/ (OverviewPanel.tsx)
@@ -717,7 +717,7 @@ JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a
 
 **What it is:** The React + TypeScript + Vite single-page app: landing page, auth pages (signup, login, verify-email, forgot-password, reset-password, account settings), dashboard, repo workspace (2D-by-default code graph with an optional 3D view and Overview/Reader/Plan/Context tabs) and a Developer page.
 **Why it exists:** Humans need a UI, and the workspace turns the deterministic graph/evidence into something you can explore; it also keeps all client code out of the backend so the API stays headless.
-**Files in it:** `frontend/src/main.tsx` (providers + render), `frontend/src/App.tsx` (routes), `frontend/src/index.css` (tokens), `frontend/src/api/*` (`client.ts`, `auth.ts`, `repos.ts`, `galaxy.ts`), `frontend/src/mock/*`, `frontend/src/types/*`, `frontend/src/lib/*`, `frontend/src/context/{AuthContext,ToastContext}.tsx`, `frontend/src/components/*` (shared, `ui/` Radix primitives, `landing/`, `auth/`, `dashboard/`, `workspace/` including `OverviewPanel.tsx`), and `frontend/src/pages/*`.
+**Files in it:** `frontend/src/main.tsx` (providers + render), `frontend/src/App.tsx` (routes), `frontend/src/index.css` (design tokens), `frontend/src/api/*` (`client.ts`, `auth.ts`, `repos.ts`, `galaxy.ts`), `frontend/src/mock/*`, `frontend/src/types/*`, `frontend/src/lib/*`, `frontend/src/context/{AuthContext,ToastContext}.tsx`, `frontend/src/components/*` (shared, `ui/` Radix primitives, `landing/`, `auth/`, `dashboard/`, `workspace/` including `OverviewPanel.tsx`), and `frontend/src/pages/*`.
 **Depends on:** Layer 7 (HTTP API) — every data call goes through `src/api/`.
 **Used by:** end users.
 
@@ -769,8 +769,14 @@ Shared TypeScript types mirroring the backend (`auth`, `repo`, `api`, `pipeline`
 *What breaks without it?* Shapes drift and mistakes only show up at runtime.
 *Think of it as:* the agreed blueprint both sides build to.
 
+**What are the design tokens (`src/index.css` and `src/lib/designTokens.ts`)?**
+`index.css` declares the canonical palette in `:root` (surfaces, brand indigo/blue, teal/violet/amber/rose/emerald accents with matching `-tint` surfaces, AA-safe status colors and card elevation) and maps it into Tailwind utilities through `@theme inline`. `designTokens.ts` mirrors those values for SVG/WebGL consumers and derives `STATUS_COLOR` and the node-type hues from the same families. `Card` takes an `accent` prop for the colored top border, and `AccentIcon` renders the tinted icon well.
+*Why do we need it?* One palette keeps status badges, plan rings and node types speaking the same color language, and AA ink values keep text readable on the light shell.
+*What breaks without it?* Colors drift between panels and the canvas, and small status text fails contrast.
+*Think of it as:* the paint chart every room in the building must use.
+
 **What are `src/lib/graphLayout.ts` and `src/lib/graphVisuals.ts`?**
-`layoutGraph` groups nodes by their immediate parent folder (or by file when only one folder exists), runs a deterministic bounded force simulation over all visible nodes and edges, centers the result at the origin and returns faint convex hulls for each group. `graphVisuals.ts` derives a display kind (module/function/class/method/route/test) from the wire kind plus the stored summary or file path, and holds the legend colors. Helpers: `buildAdjacency`, `buildCallCounts` and `positionsForIds`.
+`layoutGraph` groups nodes by their immediate parent folder (or by file when only one folder exists), runs a deterministic bounded force simulation over all visible nodes and edges, centers the result at the origin and returns faint convex hulls for each group. `graphVisuals.ts` derives a display kind (module/function/class/method/route/test) from the wire kind plus the stored summary or file path, and holds the legend colors from the shared `designTokens.ts` palette (bright `graph` hue for the node dot, AA `ink` hue for its chip text). Helpers: `buildAdjacency`, `buildCallCounts` and `positionsForIds`.
 *Why do we need it?* The API reports one top-level cluster such as `backend`; without folder-level grouping the graph collapses into a single off-center blob. Both views need one stable, readable picture.
 *What breaks without it?* Nodes overlap, labels and hulls hide the graph, and the 2D/3D toggle shows different layouts.
 *Think of it as:* an usher who seats every guest by their actual team, not by the building they work in.

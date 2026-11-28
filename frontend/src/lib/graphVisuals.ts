@@ -1,3 +1,4 @@
+import { hues } from '@/lib/designTokens'
 import type { GraphNode, IndexSymbol } from '@/types'
 
 /**
@@ -16,18 +17,21 @@ export type DisplayNodeKind =
 
 export interface NodeKindMeta {
   label: string
+  /** Bright fill used for graph nodes on the dark canvas. */
   color: string
-  /** Soft tint used for chips and legend backgrounds. */
+  /** AA-safe text color for the same hue on light surfaces. */
+  ink: string
+  /** Matching soft surface for chips. */
   tint: string
 }
 
 export const NODE_KIND_META: Record<DisplayNodeKind, NodeKindMeta> = {
-  module: { label: 'Module', color: '#60A5FA', tint: 'rgba(96,165,250,0.16)' },
-  function: { label: 'Function', color: '#22D3EE', tint: 'rgba(34,211,238,0.16)' },
-  class: { label: 'Class', color: '#A78BFA', tint: 'rgba(167,139,250,0.16)' },
-  method: { label: 'Method', color: '#FBBF24', tint: 'rgba(251,191,36,0.16)' },
-  route: { label: 'Route', color: '#FB7185', tint: 'rgba(251,113,133,0.16)' },
-  test: { label: 'Test', color: '#34D399', tint: 'rgba(52,211,153,0.16)' },
+  module: { label: 'Module', color: hues.brand.graph, ink: hues.brand.ink, tint: hues.brand.tint },
+  function: { label: 'Function', color: hues.teal.graph, ink: hues.teal.ink, tint: hues.teal.tint },
+  class: { label: 'Class', color: hues.violet.graph, ink: hues.violet.ink, tint: hues.violet.tint },
+  method: { label: 'Method', color: hues.amber.graph, ink: hues.amber.ink, tint: hues.amber.tint },
+  route: { label: 'Route', color: hues.rose.graph, ink: hues.rose.ink, tint: hues.rose.tint },
+  test: { label: 'Test', color: hues.emerald.graph, ink: hues.emerald.ink, tint: hues.emerald.tint },
 }
 
 export const LEGEND_KINDS: readonly DisplayNodeKind[] = [

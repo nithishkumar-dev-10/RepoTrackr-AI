@@ -42,7 +42,7 @@ export function NodeInspector({
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span
           className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
-          style={{ borderColor: meta.color, color: meta.color, backgroundColor: meta.tint }}
+          style={{ borderColor: meta.ink, color: meta.ink, backgroundColor: meta.tint }}
         >
           <span aria-hidden="true" className="size-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
           {meta.label}

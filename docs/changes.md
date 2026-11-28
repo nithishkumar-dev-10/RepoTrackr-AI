@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## UI polish Task 2: centralized design tokens and accent cards
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `frontend/src/lib/designTokens.ts`; modified `frontend/src/index.css`, `frontend/src/lib/graphVisuals.ts`, `frontend/src/lib/planStatus.ts`, `frontend/src/components/ui/card.tsx`, `frontend/src/components/workspace/NodeInspector.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the palette now lives in one place: `index.css` declares surfaces, brand indigo/blue, teal/violet/amber/rose/emerald accents with matching tint surfaces, AA-safe status colors and card elevation, and maps them into Tailwind utilities via `@theme inline`; `designTokens.ts` mirrors the values for SVG/WebGL and derives status and node-type hues from the same families. Statuses, plan rings and graph node types now share the emerald/amber/rose/slate hue families. `Card` gained an `accent` prop (colored top border) and a new `AccentIcon` tinted icon well; both use the shared radius/shadow and a 200ms transition. Status/ink text colors were darkened to meet WCAG AA (≥4.5:1) on the light shell, and the node detail chip now uses the AA ink color instead of the bright canvas fill. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none. New Tailwind utility classes: `bg-teal`, `bg-teal-tint`, `text-violet`, `shadow-card`, etc., from the token map.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory). Contrast of every ink color on `#ffffff` and `#f6f7fb` was checked numerically (all ≥4.5:1). No new dependency was added.
+- **Known issues / TODOs:** the CSS tokens and `designTokens.ts` are a documented mirror pair (CSS cannot import TypeScript); both must be edited together. No browser-based contrast/visual assertion runner is configured.
+
+---
+
 ## UI polish Task 1: readable, centered code graph
 
 - **Date:** 2026-11-28
