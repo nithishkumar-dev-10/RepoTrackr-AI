@@ -6,7 +6,11 @@ from app.security.email_tokens import (
     is_expired,
     is_used,
 )
-from app.security.passwords import hash_password, verify_password
+from app.security.passwords import (
+    DUMMY_PASSWORD_HASH,
+    hash_password,
+    verify_password,
+)
 from app.security.tokens import (
     ALGORITHM,
     TokenError,
@@ -18,6 +22,7 @@ from app.security.tokens import (
 
 __all__ = [
     "ALGORITHM",
+    "DUMMY_PASSWORD_HASH",
     "EMAIL_TOKEN_BYTES",
     "TokenError",
     "TokenType",

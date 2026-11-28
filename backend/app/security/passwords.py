@@ -2,6 +2,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 _hasher = PasswordHasher()
+DUMMY_PASSWORD_HASH = _hasher.hash("not-a-real-account-password-123")
 
 
 def hash_password(password: str) -> str:

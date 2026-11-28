@@ -76,7 +76,12 @@ def create_app() -> FastAPI:
             content=_error_payload(
                 "validation_error",
                 "Request validation failed",
-                jsonable_encoder(exc.errors()),
+                jsonable_encoder(
+                    [
+                        {k: v for k, v in error.items() if k not in {"input", "ctx"}}
+                        for error in exc.errors()
+                    ]
+                ),
             ),
         )
 
@@ -95,7 +100,9 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=_error_payload("http_error", str(exc.detail)),
+            content=_error_payload(
+                getattr(exc, "code", "http_error"), str(exc.detail)
+            ),
             headers=getattr(exc, "headers", None),
         )
 

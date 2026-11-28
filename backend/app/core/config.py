@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_SIGNUP: str = "10/minute"
     RATE_LIMIT_FORGOT_PASSWORD: str = "5/minute"
     RATE_LIMIT_RESEND_VERIFICATION: str = "5/minute"
+    RATE_LIMIT_REFRESH: str = "10/minute"
+    RATE_LIMIT_VERIFY_EMAIL: str = "10/minute"
+    RATE_LIMIT_RESET_PASSWORD: str = "10/minute"
+    RATE_LIMIT_CHANGE_PASSWORD: str = "10/minute"
+    RATE_LIMIT_LOGOUT: str = "10/minute"
 
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS: Annotated[list[str], NoDecode] = []
@@ -56,6 +61,13 @@ class Settings(BaseSettings):
         if isinstance(value, (list, tuple)):
             return [str(origin).strip() for origin in value if str(origin).strip()]
         return [str(value)]
+
+    @field_validator("CORS_ORIGINS")
+    @classmethod
+    def _reject_wildcard_origins(cls, value: list[str]) -> list[str]:
+        if "*" in value:
+            raise ValueError("CORS_ORIGINS cannot contain '*' with credentials")
+        return value
 
 
 @lru_cache

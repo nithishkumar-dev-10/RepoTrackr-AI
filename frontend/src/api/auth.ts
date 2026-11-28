@@ -28,8 +28,9 @@ export function signup(payload: SignupRequest): Promise<MessageResponse> {
   })
 }
 
-/** POST /auth/login — returns the access/refresh pair. A 403 means the
- *  email is not verified yet. */
+/** POST /auth/login — returns the access/refresh pair. An unverified email
+ *  is still a neutral 401; it is identified by `error.code ===
+ *  'email_not_verified'` (see `describeAuthError`). */
 export function login(payload: LoginRequest): Promise<TokenResponse> {
   return request<TokenResponse>('/auth/login', {
     method: 'POST',

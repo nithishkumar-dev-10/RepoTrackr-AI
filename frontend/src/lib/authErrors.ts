@@ -12,6 +12,15 @@ export function describeAuthError(
   fallback = 'Something went wrong. Please try again.',
 ): AuthErrorInfo {
   if (error instanceof ApiError) {
+    // The backend keeps the 401 neutral for unknown/bad credentials and only
+    // distinguishes an unverified account with this machine-readable code.
+    if (error.code === 'email_not_verified') {
+      return {
+        message: 'Please verify your email before logging in.',
+        unverified: true,
+      }
+    }
+    // Older backends used 403 for this case; keep the fallback for them.
     if (error.status === 403) {
       return {
         message:

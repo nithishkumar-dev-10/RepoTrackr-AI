@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 4: machine-readable unverified-login code + backend auth hardening
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/core/errors.py`; modified `backend/app/main.py`, `backend/app/features/auth/router.py`, `backend/tests/test_auth.py`, `docs/api_contract.md`, `docs/project_summary.md`, `docs/changes.md`, `frontend/src/api/auth.ts`, `frontend/src/lib/authErrors.ts`; folded in the pre-existing backend hardening edits to `backend/.env.example`, `backend/app/core/config.py`, `backend/app/core/email.py`, `backend/app/features/auth/dependencies.py`, `backend/app/security/{__init__,passwords,tokens}.py`, `backend/tests/conftest.py` and created `backend/tests/test_batch1_hardening.py`; no files deleted.
+- **What changed and why:** `GET /auth/login` still answers an unverified account with 401 and the same neutral `"Invalid email or password"` text as a bad login, but now raises `EmailNotVerifiedError`, a typed `ApiHTTPException` whose `code` is copied into the shared `{"error": {...}}` envelope by the global handler. Clients can therefore offer verification without account enumeration from the message. `describeAuthError()` keys off `error.code === 'email_not_verified'` (keeping the old 403 branch as a fallback), and the stale 403 comment in `auth.ts` was corrected. The earlier Phase B backend auth hardening (neutral responses, dummy hash, random refresh `jti` with single-use consumption, token invalidation, required `exp`, unverified-token rejection, stripped validation input, CORS `*` rejection, extra rate limits) was preserved and committed here so each audit task has one commit. `docs/api_contract.md` now documents the new code, the graph endpoint that Task 3 added, and the real error envelope instead of `{"detail": ...}` placeholders.
+- **New commands / env variables / endpoints / migrations:** error code `email_not_verified` on `POST /auth/login` only (HTTP 401 unchanged). No new endpoint, command or migration.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q` → **301 passed, 10 warnings in 7.65s** (including the updated unverified-login assertions and the 13 Phase B hardening tests); `cd frontend && npm run typecheck` passed; `npm run lint` reported only the same 4 known warnings (0 errors).
+- **Known issues / TODOs:** the code is emitted only when the password matches an unverified account; a probe with a wrong password stays indistinguishable by design. No frontend unit test runner exists, so the code-based branch is covered only by review/typecheck.
+
+---
+
 ## Audit closeout - Task 3: real deterministic graph endpoint
 
 - **Date:** 2026-11-28
