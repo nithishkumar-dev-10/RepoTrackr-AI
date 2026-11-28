@@ -4,8 +4,10 @@ import { useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { AccentIcon, Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/context/ToastContext'
+import type { CSSProperties } from 'react'
 import type { PositionedNode } from '@/lib/graphLayout'
 import { cn } from '@/lib/utils'
 import type { QueryResponse } from '@/types'
@@ -30,7 +32,7 @@ function TierChips({
           <button
             key={id}
             onClick={() => onSelect?.(id)}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs text-foreground transition-colors hover:border-brand/40 hover:text-brand"
+            className="inline-flex items-center gap-1.5 rounded-md border border-teal/25 bg-teal-tint px-2 py-1 text-xs text-teal transition-colors duration-200 hover:border-teal/50 hover:bg-teal-tint/80"
           >
             {node ? (
               <span
@@ -124,16 +126,35 @@ export function ContextPanel({
 
       {packed ? (
         <>
-          <div className="rounded-xl border border-border bg-background p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground">Token budget</p>
+          <Card accent="amber" className="p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AccentIcon accent="amber" className="size-9 rounded-lg">
+                  <Package className="size-4" />
+                </AccentIcon>
+                <p className="text-sm font-medium text-foreground">Token budget</p>
+              </div>
               <span className="font-mono text-xs text-muted-foreground">
                 {packed.tokensUsed.toLocaleString()} /{' '}
                 {packed.tokenBudget.toLocaleString()}
               </span>
             </div>
-            <Progress value={pct} className="mt-3" />
-          </div>
+            <Progress
+              value={pct}
+              className="mt-3"
+              style={
+                {
+                  '--progress-a': '#0F766E',
+                  '--progress-b': '#047857',
+                  '--progress-c': '#34D399',
+                  '--progress-glow': 'rgba(15,118,110,0.55)',
+                } as CSSProperties
+              }
+            />
+            <p className="mt-2 text-xs text-muted-foreground">
+              {Math.round(pct)}% of the budget used
+            </p>
+          </Card>
 
           <div className="space-y-3">
             <div>

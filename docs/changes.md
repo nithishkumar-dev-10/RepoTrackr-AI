@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## UI polish Task 3: polished Overview, timeline and mode panels
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `frontend/src/components/ui/StatusDonut.tsx`; modified `frontend/src/styles/glow.css`, `frontend/src/components/workspace/OverviewPanel.tsx`, `StageTimeline.tsx`, `ReaderPanel.tsx`, `PlanPanel.tsx`, `ContextPanel.tsx`, `frontend/src/components/CitationChip.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Overview now leads with six accented stat cards (symbols, files, modules, entry points, lines of code, graph edges) built from summary fields that were previously unused in the UI, with type-tinted symbol badges and tinted modules/entry-point cards while keeping every existing section. The indexing stepper shows a green animated current step, green completed steps and a red failed step with a red progress bar and error banner. Reader/Plan/Context keep all content and the "Not implemented yet" badge, but use accented cards, a new shared `StatusDonut`, an amber token-budget card with a teal→emerald bar and consistent `file:line` evidence chips. The progress glow now accepts `--progress-a/b/c/glow` custom properties so one effect serves every semantic bar. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory).
+- **Known issues / TODOs:** Reader/Plan/Context remain demo-backed and are still labelled "Not implemented yet"; no browser runner is configured for visual assertions.
+
+---
+
 ## UI polish Task 2: centralized design tokens and accent cards
 
 - **Date:** 2026-11-28

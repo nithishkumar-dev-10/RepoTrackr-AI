@@ -787,8 +787,14 @@ The core screen: `GraphView` defaults to 2D and switches between 2D (`Graph2D`: 
 *What breaks without it?* The product has data but no way to actually look at it.
 *Think of it as:* the control room where you watch and query the codebase.
 
+**What are `StatusDonut.tsx`, `StageTimeline.tsx` and the mock mode panels?**
+`StatusDonut` turns plan counts into a conic-gradient ring whose segments use the shared status colors and whose center stays on a solid surface. `StageTimeline` renders queued→cloning→indexing→ready with a green animated current step, green completed steps, a red failed step and a themable progress bar. `ReaderPanel`, `PlanPanel` and `ContextPanel` keep their "Not implemented yet" badge and all existing content, now inside accented cards: a teal query card, a violet status donut, tinted plan items and an amber token-budget card with a teal→emerald bar; evidence stays in `file:line` `CitationChip`s.
+*Why do we need it?* The status/evidence language must match between the graph, the timeline and the panels, and the mock modes must stay visibly labelled as placeholders.
+*What breaks without it?* Status colors disagree between panels and a failed job looks like a successful one.
+*Think of it as:* the same set of traffic lights at every junction.
+
 **What is `OverviewPanel.tsx`?**
-The Part 2 evidence tab. It refuses to render symbols until `IndexRunStatus.status` is `ready`, then shows the real `GET .../index/summary` fields: commit SHA, symbol counts, modules, entry points, file tree and each symbol's `file:line_start`–`line_end`; loading, empty and error states are explicit and the error state has Retry.
+The Part 2 evidence tab. It refuses to render symbols until `IndexRunStatus.status` is `ready`, then shows the real `GET .../index/summary` fields: commit SHA, a grid of six accented stat cards (symbols, files, modules, entry points, lines of code, graph edges), symbol counts tinted by node type, modules and entry points in tinted cards, file tree and each symbol's `file:line_start`–`line_end`; loading, empty and error states are explicit and the error state has Retry.
 *Why do we need it?* It makes the deterministic index visible without waiting for the AI/query layers.
 *What breaks without it?* The user can trigger indexing but cannot see what was actually parsed or where symbols live.
 *Think of it as:* the table of contents printed from the index itself.

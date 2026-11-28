@@ -3,6 +3,7 @@ import { BookOpen, Loader2 } from 'lucide-react'
 
 import { CitationChip } from '@/components/CitationChip'
 import { CodeBlock } from '@/components/workspace/CodeBlock'
+import { AccentIcon, Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { PositionedNode } from '@/lib/graphLayout'
 import { cn } from '@/lib/utils'
@@ -51,12 +52,17 @@ export function ReaderPanel({
   return (
     <div className="space-y-4 p-4">
       {query ? (
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Query
-          </p>
-          <p className="text-sm font-medium text-foreground">{query}</p>
-        </div>
+        <Card accent="teal" className="flex items-center gap-3 p-3">
+          <AccentIcon accent="teal" className="size-9 rounded-lg">
+            <BookOpen className="size-4" />
+          </AccentIcon>
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Query
+            </p>
+            <p className="truncate text-sm font-medium text-foreground">{query}</p>
+          </div>
+        </Card>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -70,13 +76,15 @@ export function ReaderPanel({
         ) : null}
       </div>
 
-      <motion.p
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"
-      >
-        {response.answer}
-      </motion.p>
+      <Card className="p-4">
+        <motion.p
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="whitespace-pre-wrap text-sm leading-relaxed text-foreground"
+        >
+          {response.answer}
+        </motion.p>
+      </Card>
 
       {order.length > 0 ? (
         <div>
@@ -104,7 +112,7 @@ export function ReaderPanel({
                     )}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-canvas text-[10px] font-semibold text-white">
+                      <span className="grid size-5 shrink-0 place-items-center rounded-full bg-teal-tint text-[10px] font-semibold text-teal">
                         {i + 1}
                       </span>
                       <span className="flex-1 truncate text-sm font-medium text-foreground">

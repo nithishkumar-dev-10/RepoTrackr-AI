@@ -214,8 +214,15 @@
 .progress-glow {
   position: relative;
   overflow: hidden;
-  background: linear-gradient(90deg, #3b5bff, #7c5cff 55%, #22d3ee);
-  box-shadow: 0 0 12px -2px rgba(59, 91, 255, 0.8);
+  /* Themed with --progress-a/b/c so the indexing and token-budget bars share
+     one effect while keeping their semantic colors. */
+  background: linear-gradient(
+    90deg,
+    var(--progress-a, #3b5bff),
+    var(--progress-b, #7c5cff) 55%,
+    var(--progress-c, #22d3ee)
+  );
+  box-shadow: 0 0 12px -2px var(--progress-glow, rgba(59, 91, 255, 0.8));
 }
 .progress-glow::after {
   content: '';
