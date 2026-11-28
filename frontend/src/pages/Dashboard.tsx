@@ -11,6 +11,7 @@ import { TrackRepoModal } from '@/components/dashboard/TrackRepoModal'
 import { GlowButton } from '@/components/GlowButton'
 import { PageTransition } from '@/components/PageTransition'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { AccentIcon } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/context/AuthContext'
@@ -205,25 +206,41 @@ export default function Dashboard() {
               </AlertDescription>
             </Alert>
           ) : repos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface/60 px-6 py-20 text-center">
-              <span className="grid size-14 place-items-center rounded-2xl bg-accent text-brand">
-                <Boxes className="size-6" />
-              </span>
-              <h2 className="mt-4 text-lg font-semibold text-foreground">
-                No repositories yet
-              </h2>
-              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Add a public GitHub repository to build its graph and start
-                asking questions.
-              </p>
-              <GlowButton
-                variant="brand"
-                className="mt-5"
-                onClick={() => setModalOpen(true)}
-              >
-                <Plus className="size-4" />
-                Track your first repository
-              </GlowButton>
+            <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-brand/30 bg-gradient-to-b from-brand-tint/70 to-surface px-6 py-20 text-center">
+              <div
+                aria-hidden="true"
+                className="dot-grid pointer-events-none absolute inset-0 opacity-40"
+              />
+              <div className="relative flex flex-col items-center">
+                <AccentIcon accent="brand" className="size-14 rounded-2xl shadow-card">
+                  <Boxes className="size-6" />
+                </AccentIcon>
+                <h2 className="mt-4 text-lg font-semibold text-foreground">
+                  No repositories yet
+                </h2>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                  Add a public GitHub repository to build its graph and start
+                  asking questions.
+                </p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {['Code graph', 'Reader', 'Plan verifier', 'Context packer'].map((label) => (
+                    <span
+                      key={label}
+                      className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted-foreground"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <GlowButton
+                  variant="brand"
+                  className="mt-5"
+                  onClick={() => setModalOpen(true)}
+                >
+                  <Plus className="size-4" />
+                  Track your first repository
+                </GlowButton>
+              </div>
             </div>
           ) : (
             <motion.div

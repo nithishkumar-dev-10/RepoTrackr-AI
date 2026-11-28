@@ -65,7 +65,14 @@ function AuthPanel() {
 
   return (
     <div className="relative hidden overflow-hidden lg:block">
-      <div className="absolute inset-0 bg-gradient-to-br from-[#1E2A78] via-[#3B5BFF] to-[#8B5CF6]" />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0"
+        style={{
+          background:
+            'linear-gradient(135deg, var(--canvas-soft), var(--brand) 55%, var(--violet))',
+        }}
+      />
       <div
         aria-hidden="true"
         className="absolute inset-0 opacity-30"

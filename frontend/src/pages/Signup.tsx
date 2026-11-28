@@ -99,7 +99,7 @@ export default function Signup() {
         title="Check your email"
         subtitle="One more step before you can log in."
         footer={
-          <Link to="/login" className="font-medium text-brand hover:underline">
+          <Link to="/login" className="rounded-sm font-medium text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             Back to log in
           </Link>
         }
@@ -109,7 +109,7 @@ export default function Signup() {
           animate={{ opacity: 1, scale: 1 }}
           className="space-y-4"
         >
-          <div className="relative grid size-12 place-items-center rounded-full bg-status-done/15 text-status-done glow-sm">
+          <div className="relative grid size-12 place-items-center rounded-full bg-status-done-tint text-status-done glow-sm">
             <MailCheck className="size-6" />
             <SuccessRipple show className="rounded-full" />
           </div>
@@ -156,7 +156,7 @@ export default function Signup() {
       footer={
         <>
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-brand hover:underline">
+          <Link to="/login" className="rounded-sm font-medium text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             Log in
           </Link>
         </>

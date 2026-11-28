@@ -38,8 +38,8 @@ export function FloatingInput({
             'focus:outline-none focus:ring-2 focus:ring-ring/50 focus:glow-sm',
             isPassword && 'pr-11',
             error
-              ? 'border-destructive focus:ring-destructive/40 focus:shadow-[0_0_0_3px_rgba(239,68,68,0.14)]'
-              : 'border-input focus:border-brand',
+              ? 'border-destructive focus:ring-destructive/40 focus:shadow-[0_0_0_3px_rgba(220,38,38,0.14)]'
+              : 'border-input hover:border-brand/40 focus:border-brand',
             className,
           )}
           {...props}

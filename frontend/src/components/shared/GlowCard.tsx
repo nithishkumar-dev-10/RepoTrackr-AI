@@ -70,7 +70,7 @@ export function GlowCard({
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 opacity-0 transition-opacity duration-300 group-hover/glow:opacity-100"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-0 transition-opacity duration-200 group-hover/glow:opacity-100"
         style={{
           background:
             'radial-gradient(300px circle at var(--spot-x, 50%) var(--spot-y, 0%), var(--glow-spot), transparent 62%)',

@@ -793,6 +793,12 @@ The core screen: `GraphView` defaults to 2D and switches between 2D (`Graph2D`: 
 *What breaks without it?* Status colors disagree between panels and a failed job looks like a successful one.
 *Think of it as:* the same set of traffic lights at every junction.
 
+**What are the dashboard and auth surfaces (`Dashboard.tsx`, `RepoCard.tsx`, `MiniGraphThumb.tsx`, `AuthSplitLayout.tsx`)?**
+`RepoCard` pairs a status chip (tinted with the shared status tokens) with a deterministic, token-colored `MiniGraphThumb`; `Dashboard` uses a soft tinted empty state with feature chips and the same "Track repository" action. Landing and the login/signup pages use the brand→violet→teal palette, visible focus rings and 150–200ms hover transitions; `AuthSplitLayout` draws its dark panel gradient from the same tokens.
+*Why do we need it?* The first screen a user sees must communicate status at a glance and keep keyboard focus obvious.
+*What breaks without it?* Status chips disagree with the rest of the app, the mini graph is an unreadable blur, and focus is invisible.
+*Think of it as:* the shop window — the same lighting and signage as the rest of the building.
+
 **What is `OverviewPanel.tsx`?**
 The Part 2 evidence tab. It refuses to render symbols until `IndexRunStatus.status` is `ready`, then shows the real `GET .../index/summary` fields: commit SHA, a grid of six accented stat cards (symbols, files, modules, entry points, lines of code, graph edges), symbol counts tinted by node type, modules and entry points in tinted cards, file tree and each symbol's `file:line_start`–`line_end`; loading, empty and error states are explicit and the error state has Retry.
 *Why do we need it?* It makes the deterministic index visible without waiting for the AI/query layers.

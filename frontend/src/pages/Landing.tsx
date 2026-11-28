@@ -19,11 +19,12 @@ import { GlowButton } from '@/components/GlowButton'
 import { Logo } from '@/components/Logo'
 import { PageTransition } from '@/components/PageTransition'
 import { ScrollReveal } from '@/components/ScrollReveal'
+import { cn } from '@/lib/utils'
 
 const STATS = [
-  { kind: 'count', value: 3, label: 'query modes' },
-  { kind: 'count', value: 1, label: 'shared index' },
-  { kind: 'text', value: 'file:line', label: 'on every claim' },
+  { kind: 'count', value: 3, label: 'query modes', dot: 'bg-brand' },
+  { kind: 'count', value: 1, label: 'shared index', dot: 'bg-violet' },
+  { kind: 'text', value: 'file:line', label: 'on every claim', dot: 'bg-teal' },
 ] as const
 
 const HEADLINE: { text: string; gradient?: boolean }[] = [
@@ -57,7 +58,7 @@ export default function Landing() {
               </a>
               <Link
                 to="/login"
-                className="glass inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-foreground transition-shadow duration-200 hover:glow-sm"
+                className="glass inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-foreground transition-[color,background-color,box-shadow] duration-200 hover:bg-accent hover:glow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 Log in
               </Link>
@@ -74,11 +75,11 @@ export default function Landing() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs text-muted-foreground"
+              className="glass inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               <span
                 className="pulse-dot size-1.5 rounded-full bg-status-done"
-                style={{ '--glow-soft': 'rgba(22,163,74,0.5)' } as CSSProperties}
+                style={{ '--glow-soft': 'rgba(4,120,87,0.5)' } as CSSProperties}
               />
               Reader, Plan Verifier and Context Packer in one tool
             </motion.span>
@@ -97,7 +98,7 @@ export default function Landing() {
                   className={
                     'mr-[0.28em] inline-block' +
                     (word.gradient
-                      ? ' glow-text bg-gradient-to-r from-[#3B5BFF] via-[#7C5CFF] to-[#22D3EE] bg-clip-text text-transparent'
+                      ? ' glow-text bg-gradient-to-r from-brand via-violet to-teal bg-clip-text text-transparent'
                       : '')
                   }
                 >
@@ -135,7 +136,7 @@ export default function Landing() {
               </GlowButton>
               <Link
                 to="/login"
-                className="glass inline-flex h-11 items-center rounded-md px-6 text-sm font-medium text-foreground transition-shadow duration-200 hover:glow-sm"
+                className="glass inline-flex h-11 items-center rounded-md px-6 text-sm font-medium text-foreground transition-[color,background-color,box-shadow] duration-200 hover:bg-accent hover:glow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
               >
                 Log in
               </Link>
@@ -169,7 +170,10 @@ export default function Landing() {
                     <span className="font-mono text-xl">{stat.value}</span>
                   )}
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
+                <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span aria-hidden="true" className={cn('size-1.5 rounded-full', stat.dot)} />
+                  {stat.label}
+                </p>
               </div>
             ))}
           </motion.div>
@@ -239,7 +243,7 @@ export default function Landing() {
                       </GlowButton>
                       <Link
                         to="/developer"
-                        className="inline-flex h-11 items-center gap-2 rounded-md border border-white/20 bg-white/10 px-6 text-sm font-medium text-white backdrop-blur transition-colors duration-200 hover:bg-white/20"
+                        className="inline-flex h-11 items-center gap-2 rounded-md border border-white/20 bg-white/10 px-6 text-sm font-medium text-white backdrop-blur transition-colors duration-200 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
                       >
                         <Terminal className="size-4" />
                         View the API

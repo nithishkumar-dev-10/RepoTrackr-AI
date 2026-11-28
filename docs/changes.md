@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## UI polish Task 4: dashboard cards and landing/auth polish
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** no files created; modified `frontend/src/components/dashboard/MiniGraphThumb.tsx`, `RepoCard.tsx`, `frontend/src/pages/Dashboard.tsx`, `Landing.tsx`, `Login.tsx`, `Signup.tsx`, `frontend/src/components/auth/AuthSplitLayout.tsx`, `FloatingInput.tsx`, `frontend/src/components/landing/FeatureCards.tsx`, `frontend/src/components/shared/GlowCard.tsx`, `frontend/src/components/Navbar.tsx`, `frontend/src/components/GlowRipple.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** repo cards now use tinted status chips matching the shared status tokens, and the mini graph thumbnail is readable (solid dark backdrop, brighter edges, palette-colored nodes, no blur halos). The dashboard empty state is a tinted card with feature chips around the existing CTA. Landing uses token-based gradient text/stat dots, and login/signup plus the auth split panel use the shared palette with visible focus rings and hover states. Hover/CSS transitions were normalized to 150–200ms; the global `prefers-reduced-motion` rule and `MotionConfig reducedMotion="user"` already disable movement. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory).
+- **Known issues / TODOs:** responsive widths (1440/1024/390px) and real-browser hover/focus behavior are still to be checked in Task 5.
+
+---
+
 ## UI polish Task 3: polished Overview, timeline and mode panels
 
 - **Date:** 2026-11-28

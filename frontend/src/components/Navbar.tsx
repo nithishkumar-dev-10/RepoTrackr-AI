@@ -66,7 +66,7 @@ export function Navbar() {
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-[opacity,box-shadow] duration-300',
+          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-[opacity,box-shadow] duration-200',
           scrolled ? 'opacity-100' : 'opacity-0',
         )}
         style={{
