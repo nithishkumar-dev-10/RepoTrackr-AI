@@ -145,12 +145,12 @@ RepoTrackr-AI/
 │           ├── test_chunking.py     # chunks, token counts, cache (11)
 │           └── test_retrieval.py    # tokenizer, BM25 ranking, queries runner (19)
 ├── docker/
-│   └── docker-compose.yml           # Empty; no Dockerfile yet
+│   └── .gitkeep                     # Empty placeholder; no compose file or Dockerfile yet
 ├── docs/
 │   ├── RepoTrackr-AI-Execution-Plan.md  # Source-of-truth roadmap (Parts 1-4)
 │   ├── project_summary.md           # This file (canonical)
 │   ├── api_contract.md              # Endpoint contract for Parts 1-4
-│   ├── mock_responses.md            # Example JSON for frontend mocks
+│   ├── mock_responses.md            # Example JSON: live Part 1/2 responses + Part 3–4 mocks
 │   ├── openapi.json                 # Generated OpenAPI 3.1 spec
 │   ├── postman_collection.json      # Postman collection generated from the spec
 │   └── changes.md                   # Step-by-step change log (all history)
@@ -793,19 +793,19 @@ A page listing every backend endpoint (method, path, Live vs Demo) and a live **
 
 **What it is:** Local orchestration, evaluation harness, and helper scripts.
 **Why it exists:** These support the runtime without being part of the runtime dependency chain.
-**Files in it:** `docker/docker-compose.yml` (empty), `evals/` (folders for agent, context_packer, data, plan_verifier — all `.gitkeep` only), `scripts/.gitkeep`.
+**Files in it:** `docker/.gitkeep` (the empty `docker-compose.yml` was removed; no Dockerfile yet), `evals/` (folders for agent, context_packer, data, plan_verifier — all `.gitkeep` only), `scripts/.gitkeep`.
 **Depends on:** the layers it wraps/tests (any).
 **Used by:** developers and CI.
 
-*Not implemented yet. `docker/docker-compose.yml` is empty and there is no Dockerfile. `evals/` and `scripts/` hold only `.gitkeep` files.*
+*Not implemented yet. `docker/` holds only `.gitkeep` — there is no compose file or Dockerfile. `evals/` and `scripts/` hold only `.gitkeep` files.*
 
 #### Study Notes for this layer
 
-**What is `docker/docker-compose.yml`?**
-A placeholder for running the stack via Docker Compose.
-*Why do we need it?* Consistent local/dev environments.
-*What breaks without it?* You run everything manually.
-*Think of it as:* a shipping container that packages the whole app.
+**What is `docker/`?**
+An empty placeholder folder (`.gitkeep` only) reserved for Docker orchestration; the zero-byte `docker-compose.yml` was removed because it described nothing.
+*Why do we need it?* It keeps the approved folder structure available for a real compose file and Dockerfile later.
+*What breaks without it?* Nothing runs today — the backend and Vite dev server are started directly; there is simply no one-command container setup.
+*Think of it as:* an empty shipping container parked in the yard, waiting for the app to be packed into it.
 
 **What is `evals/`?**
 The planned home for evaluation harnesses (agent, context packer, plan verifier) and eval data.
@@ -1024,7 +1024,7 @@ Working now (verified by the current 301-test suite; see `docs/changes.md` for s
 - Email service (`app/core/email.py`): SMTP sending via `SMTP_*`/`EMAIL_FROM` with a console fallback when `SMTP_HOST` is unset; the fallback logs only recipient, subject and a body-omitted warning, and verification/reset link helpers build the tokenized URLs.
 - Request/response schemas (`app/schemas/{common,auth,repo,indexing,stub}.py`) and the documented contract (`docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/postman_collection.json`).
 - Security helpers (`app/security/{passwords,tokens,email_tokens}.py`): argon2 password hashing with a dummy hash for unknown-user login timing, JWT access/refresh with random refresh `jti`, required `exp` and type-checked `decode_token`, and verify/reset email-token helpers.
-- `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map and docs links.
+- `README.md`: project overview, tech stack, setup from scratch, run/test commands, folder map, docs links, the N/A note for static frontend pages and a Known limitations section. `frontend/README.md` covers the Vite client's env vars, commands, API boundary and state handling.
 - Tests (`backend/tests/`): **301 passing** (`python -m pytest -q`) — `test_security.py` 18, `test_auth.py` 42, `test_batch1_hardening.py` 13, `test_repos.py` 19, `test_stubs.py` 20, `test_indexing.py` 10, `test_graph_endpoint.py` 5, `test_schema_defaults.py` 2, and under `tests/pipeline/`: `test_clone.py` 74, `test_cleanup.py` 16, `test_indexer.py` 24, `test_graph.py` 16, `test_chunking.py` 11, `test_redaction.py` 12, `test_retrieval.py` 19.
 - Frontend (Layer 8, `frontend/`): landing page, signup/login/verify-email/forgot-password/reset-password, dashboard (track-repo modal, status chips, live "Index" action), repo workspace (3D/2D/List graph, Overview/Reader/Plan/Context tabs, ⌘K command bar, real queued/cloning/indexing/ready/failed timeline), Developer page (endpoint catalog + live API activity) and account settings (profile, change password, delete account). `AuthContext` starts anonymous with no token, listens for `rt:auth-invalidated` from `client.ts`, and stops auth-guarded pollers on invalidation; `tokenStorage` bumps a generation on clear so in-flight refresh writes are ignored. `npm run typecheck`, `npm run lint` (0 warnings, 0 errors) and `npm run build` pass; no frontend test script is configured. `MiniGraphThumb` and `PlanPanel` avoid render-scope mutation, and the UI variant helpers stay internal so Fast Refresh works. Part 2 routes, including `/graph`, are live; `VITE_USE_MOCKS=false` by default, and only the Part 3–4 query modes remain labelled mock data.
 
@@ -1032,7 +1032,7 @@ Not built yet (current absences, not a plan):
 - Retrieval is still CLI/library-only: there is no search route (`POST .../query` is a `501` stub), and no LLM/AI layer consumes the chunks.
 - Every analysis pass (`app/analysis/{reader_order,retrieval,plan_checks,packer}`) is an empty `__init__.py`.
 - AI layer (`app/ai/{embeddings,prompts,router}`) and the agent loop (`app/agent` holds only the `501` trace router): no embeddings, no LLM provider (Gemini included) and no API-key setting.
-- Eval set and harnesses (`evals/*` — `.gitkeep` only), Docker orchestration (`docker/docker-compose.yml` empty, no Dockerfile) and helper scripts (`scripts/` — `.gitkeep` only).
+- Eval set and harnesses (`evals/*` — `.gitkeep` only), Docker orchestration (`docker/` is `.gitkeep` only, no compose file or Dockerfile) and helper scripts (`scripts/` — `.gitkeep` only).
 
 Known open issues (current state):
 - Reader/Plan/Context still use mock evidence and are labelled "Not implemented yet"; their `{data, demo}` result is unwrapped before it reaches the panels, and a panel error boundary prevents a future crash from blanking the page.
@@ -1059,6 +1059,8 @@ source .venv/bin/activate
 pip install -r requirements.txt        # runtime deps
 pip install -r requirements-dev.txt    # also pulls pytest + httpx for tests
 ```
+
+`requirements-dev.txt` was verified in a fresh virtual environment: installing it resolved every pinned dependency and `python -m pytest -q` reported 301 passing there as well.
 
 Environment variables:
 - Copy the template and edit it: `cp .env.example .env`
@@ -1130,7 +1132,7 @@ Start the backend first (from `backend/`, venv active) with `uvicorn app.main:ap
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
 - **Layer 5, `app/pipeline/`:** clone (with cleanup), indexer, graph, chunking and retrieval exist as tested library + CLI code. What is missing is the HTTP wiring (endpoints, status tracking, `Repo.commit_sha`) and the `pipeline/cache` package; wire `safe_clone` into a `Repo` row and run each pipeline step inside `clone_workspace()` so scratch folders are removed as soon as a run finishes.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
-- **Layer 9:** fill `docker/docker-compose.yml` and add a Dockerfile; stand up the `evals/` harnesses.
+- **Layer 9:** add a real `docker/docker-compose.yml` and a Dockerfile; stand up the `evals/` harnesses.
 - **Tests:** `test_security.py`, `test_auth.py`, `test_repos.py`, `test_stubs.py` and `tests/pipeline/*` exist (265 passing) — extend them (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, real pipeline endpoints).
 
 ## How To Contribute

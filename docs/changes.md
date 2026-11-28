@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 6: documentation accuracy and dev-dependency verification
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `docker/.gitkeep`; deleted the zero-byte `docker/docker-compose.yml`; modified `README.md`, `frontend/README.md`, `docs/mock_responses.md`, `docs/project_summary.md`, `docs/changes.md`; no other files changed.
+- **What changed and why:** the root README now describes Parts 1–2 as implemented, lists the live index/graph endpoints and 301 tests, documents the folder layout as it exists, and adds a Known limitations section (no AI/evals, CLI-only retrieval, single-process assumptions, graph caps, no Docker stack, no frontend test runner). `frontend/README.md` replaced the untouched Vite template with project-specific setup, env vars, commands, API boundary and state-handling notes. `docs/mock_responses.md` now shows the neutral 201 duplicate signup, the 401 `email_not_verified` login code, validation details without submitted `input`, live Part 2 index/summary/graph examples, and limits the 501 section to Part 3–4. The empty compose file was removed and replaced by `.gitkeep` so the approved `docker/` folder remains without a misleading placeholder.
+- **New commands / env variables / endpoints / migrations:** none. `requirements-dev.txt` was installed into a fresh temporary venv (outside the repo) and `python -m pytest -q` reported **301 passed, 10 warnings in 7.92s** there, confirming the pinned dev requirements are sufficient.
+- **Verification:** clean-venv install + pytest as above; `cd backend && .venv/bin/python -m pytest -q` still **301 passed**; `cd frontend && npm run typecheck && npm run lint && npm run build` clean (0 lint warnings).
+- **Known issues / TODOs:** `docker/` still has no real compose file or Dockerfile; Large Vite chunks and the absence of a frontend test runner remain documented limitations. No new docs claims are unverified.
+
+---
+
 ## Audit closeout - Task 5: frontend states, clean lint, static-page note
 
 - **Date:** 2026-11-28

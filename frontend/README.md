@@ -1,32 +1,42 @@
-# React + TypeScript + Vite
+# RepoTrackr AI — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + TypeScript + Vite client for the RepoTrackr AI backend. It provides the landing/auth pages, account settings, the repository dashboard, the repo workspace (graph + Overview/Reader/Plan/Context tabs + ⌘K command bar) and a Developer page that lists endpoints and shows live API activity.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+cp .env.example .env        # optional: VITE_API_URL defaults to http://localhost:8000
+npm run dev                 # http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Environment variables (only `VITE_*` is exposed to the browser):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8000` | Base URL of the FastAPI backend |
+| `VITE_USE_MOCKS` | `false` | When `true`, the graph uses local mock data for demos; Part 3–4 query modes always have their own mock fallback |
+
+The backend must allow the dev origin: add `http://localhost:5173` to `CORS_ORIGINS` in `backend/.env`.
+
+## Commands
+
+```bash
+npm run typecheck   # tsc -b --noEmit
+npm run lint        # oxlint
+npm run build       # production build into dist/
+```
+
+There is no frontend test runner configured. Typecheck, lint and build are the automated checks.
+
+## API boundary
+
+`src/api/client.ts` is the single fetch wrapper: it prefixes `VITE_API_URL`, attaches the bearer token, retries once after a refresh on 401, parses the shared `{"error": {"code", "message"}}` envelope into `ApiError`, and logs each call for the Developer page. Auth failures dispatch `rt:auth-invalidated` so `AuthContext` returns to `anonymous` and stops protected pollers.
+
+Live Part 2 calls in `src/api/galaxy.ts`: `startIndex`, `getIndexStatus`, `getIndexSummary` and `getGraph`. The Part 3–4 routes still return `501`, so those calls fall back to typed data in `src/mock/*` and are labelled "Not implemented yet" in the UI.
+
+## State handling
+
+Dashboard (repository list) and RepoWorkspace (repo, status, summary, graph) show explicit loading, error/Retry and empty states; a failed graph request no longer blanks the workspace. The landing, Developer and account-settings pages are static in this sense: they render local content or submit forms and use toasts/inline messages instead of async list states.
+
+For the full file-by-file guide, see `docs/project_summary.md`; for endpoint contracts, see `docs/api_contract.md` and `docs/mock_responses.md`.
