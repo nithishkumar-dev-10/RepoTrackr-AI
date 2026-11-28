@@ -35,7 +35,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
-import { buildAdjacency, layoutGraph } from '@/lib/graphLayout'
+import { buildAdjacency, buildCallCounts, layoutGraph } from '@/lib/graphLayout'
+import { buildSymbolKindMap } from '@/lib/graphVisuals'
 import { cn } from '@/lib/utils'
 import type {
   Graph,
@@ -214,12 +215,20 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
     }
   }, [authStatus, repo, effectiveStatus?.status, fetchSummary, fetchGraph])
 
-  const layout = useMemo(() => (graph ? layoutGraph(graph) : null), [graph])
+  const symbolKinds = useMemo(() => buildSymbolKindMap(summary?.symbols), [summary])
+  const layout = useMemo(
+    () => (graph ? layoutGraph(graph, { symbolKinds }) : null),
+    [graph, symbolKinds],
+  )
   const nodes = useMemo(() => layout?.nodes ?? [], [layout])
   const clusters = useMemo(() => layout?.clusters ?? [], [layout])
   const edges = useMemo(() => graph?.edges ?? [], [graph])
   const adjacency = useMemo(
     () => (graph ? buildAdjacency(graph) : new Map<string, Set<string>>()),
+    [graph],
+  )
+  const callCounts = useMemo(
+    () => (graph ? buildCallCounts(graph) : new Map<string, { callers: number; callees: number }>()),
     [graph],
   )
 
@@ -414,12 +423,8 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
               highlightIds={highlightIds}
               nodeStatus={nodeStatus}
               readingOrder={readingOrder}
+              truncated={graph.truncated}
             />
-            {graph.truncated ? (
-              <p className="absolute right-3 top-3 rounded-lg bg-surface/90 px-2 py-1 text-xs text-muted-foreground">
-                Graph capped for display
-              </p>
-            ) : null}
           </>
         ) : (
           <div className="grid h-full place-items-center bg-canvas p-6 text-center">
@@ -520,6 +525,8 @@ function RepoWorkspaceView({ repoId }: { repoId: number }) {
               <NodeInspector
                 node={selectedNode}
                 neighborCount={adjacency.get(selectedNode.id)?.size ?? 0}
+                callers={callCounts.get(selectedNode.id)?.callers ?? 0}
+                callees={callCounts.get(selectedNode.id)?.callees ?? 0}
                 onClear={() => setSelectedId(null)}
               />
             </div>

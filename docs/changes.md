@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## UI polish Task 1: readable, centered code graph
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `frontend/src/lib/graphVisuals.ts`; modified `frontend/src/lib/graphLayout.ts`, `frontend/src/components/workspace/GraphView.tsx`, `Graph2D.tsx`, `Graph3D.tsx`, `NodeInspector.tsx`, `frontend/src/pages/RepoWorkspace.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the API assigns every file in a repo like `cafe-management` to one top-level cluster (`backend`); the old layout put that single cluster on a ring at x=24 and kept only module nodes, so the graph was off-center and dense, and the 3D additive halos plus bloom made it look like one filled blob. `layoutGraph` now groups by immediate parent folder (falling back to per-file when there is only one folder), includes module and symbol nodes, runs a bounded deterministic force simulation with repulsion/collision, centers the result, and emits faint 8%-fill convex hulls. `Graph2D` is now the default: fit-to-view `preserveAspectRatio`, wheel zoom, drag pan, Reset view, a search box, a type legend, hover/selected neighbor emphasis, a node-count/capped notice and labels only on hover/selection. `Graph3D` uses centered camera bounds, type-colored nodes, no opaque halos or bloom, and pan/zoom; the List view and all loading/error/empty states are unchanged. `NodeInspector` gained symbol-type, callers and callees. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory). No new dependency was added.
+- **Known issues / TODOs:** no browser runner is configured, so visual centering, hover and WebGL behavior were verified by code review and the build, not an automated browser assertion. Method/route/test hues are derived from the stored index summary or file paths because the graph wire shape only carries `class`/`function`/`module`.
+
+---
+
 ## Verification flag: dev/demo email-verification bypass
 
 - **Date:** 2026-11-28

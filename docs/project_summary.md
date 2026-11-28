@@ -177,7 +177,7 @@ RepoTrackr-AI/
 │       ├── mock/                    # Typed mock data for the 501 endpoints
 │       ├── types/                   # Wire + UI types (auth, repo, graph, query, pipeline, api)
 │       ├── lib/                     # env, tokenStorage, motion, validation, authErrors, github,
-│       │                            #   graphLayout, planStatus, endpoints, apiLog, utils
+│       │                            #   graphLayout, graphVisuals, planStatus, endpoints, apiLog, utils
 │       ├── context/                 # AuthContext, ToastContext
 │       ├── components/              # shared (GlowCard, GlowButton, GlowRipple, …) + ui/ (Radix)
 │       │                            #   + landing/ + auth/ + dashboard/ + workspace/ (OverviewPanel.tsx)
@@ -715,7 +715,7 @@ JWTs signed with `SECRET_KEY` (HS256). Access tokens carry `type="access"` and a
 
 ### Layer 8: Frontend
 
-**What it is:** The React + TypeScript + Vite single-page app: landing page, auth pages (signup, login, verify-email, forgot-password, reset-password, account settings), dashboard, repo workspace (3D code-graph canvas with Overview/Reader/Plan/Context tabs) and a Developer page.
+**What it is:** The React + TypeScript + Vite single-page app: landing page, auth pages (signup, login, verify-email, forgot-password, reset-password, account settings), dashboard, repo workspace (2D-by-default code graph with an optional 3D view and Overview/Reader/Plan/Context tabs) and a Developer page.
 **Why it exists:** Humans need a UI, and the workspace turns the deterministic graph/evidence into something you can explore; it also keeps all client code out of the backend so the API stays headless.
 **Files in it:** `frontend/src/main.tsx` (providers + render), `frontend/src/App.tsx` (routes), `frontend/src/index.css` (tokens), `frontend/src/api/*` (`client.ts`, `auth.ts`, `repos.ts`, `galaxy.ts`), `frontend/src/mock/*`, `frontend/src/types/*`, `frontend/src/lib/*`, `frontend/src/context/{AuthContext,ToastContext}.tsx`, `frontend/src/components/*` (shared, `ui/` Radix primitives, `landing/`, `auth/`, `dashboard/`, `workspace/` including `OverviewPanel.tsx`), and `frontend/src/pages/*`.
 **Depends on:** Layer 7 (HTTP API) — every data call goes through `src/api/`.
@@ -769,14 +769,14 @@ Shared TypeScript types mirroring the backend (`auth`, `repo`, `api`, `pipeline`
 *What breaks without it?* Shapes drift and mistakes only show up at runtime.
 *Think of it as:* the agreed blueprint both sides build to.
 
-**What is `src/lib/graphLayout.ts`?**
-A deterministic layout shared by the 2D and 3D views: clusters sit on a ring, nodes spiral inside their cluster (no randomness), capped at 1500 nodes, plus `buildAdjacency` and `positionsForIds` helpers.
-*Why do we need it?* Both graph views must agree on where nodes are, and the layout must be stable across renders.
-*What breaks without it?* Nodes would jump around and the 2D/3D toggle couldn't share a picture.
-*Think of it as:* an usher who seats every guest in the same seat every time.
+**What are `src/lib/graphLayout.ts` and `src/lib/graphVisuals.ts`?**
+`layoutGraph` groups nodes by their immediate parent folder (or by file when only one folder exists), runs a deterministic bounded force simulation over all visible nodes and edges, centers the result at the origin and returns faint convex hulls for each group. `graphVisuals.ts` derives a display kind (module/function/class/method/route/test) from the wire kind plus the stored summary or file path, and holds the legend colors. Helpers: `buildAdjacency`, `buildCallCounts` and `positionsForIds`.
+*Why do we need it?* The API reports one top-level cluster such as `backend`; without folder-level grouping the graph collapses into a single off-center blob. Both views need one stable, readable picture.
+*What breaks without it?* Nodes overlap, labels and hulls hide the graph, and the 2D/3D toggle shows different layouts.
+*Think of it as:* an usher who seats every guest by their actual team, not by the building they work in.
 
 **What is the repo workspace (`src/components/workspace/*`)?**
-The core screen: `GraphView` picks 3D (`Graph3D`, lazy-loaded WebGL "galaxy") / 2D (`Graph2D`) / List (`GraphList`, Mermaid + module list); `ModeTabs` + `ModePanel` switch Overview (`OverviewPanel`), Reader (`ReaderPanel`), Plan (`PlanPanel`) and Context (`ContextPanel`); `CommandBar` is the ⌘K ask box; `StageTimeline` shows queued→cloning→indexing→ready with `failed`, `error_message` and Retry; `CodeBlock` renders shiki-highlighted snippets (lazily imported); `CanvasErrorBoundary` falls back to the 2D graph if WebGL fails.
+The core screen: `GraphView` defaults to 2D and switches between 2D (`Graph2D`: fitted/centered SVG, faint group hulls, zoom/pan, search, legend, hover/selected neighbor emphasis) / 3D (`Graph3D`, lazy-loaded WebGL with a centered camera and no opaque halos) / List (`GraphList`, Mermaid + module list); `Reset view` restores the fitted camera/viewBox. `ModeTabs` + `ModePanel` switch Overview (`OverviewPanel`), Reader (`ReaderPanel`), Plan (`PlanPanel`) and Context (`ContextPanel`); `CommandBar` is the ⌘K ask box; `StageTimeline` shows queued→cloning→indexing→ready with `failed`, `error_message` and Retry; `NodeInspector` shows a selected node's kind, `file:line`, links, callers and callees; `CodeBlock` renders shiki-highlighted snippets (lazily imported); `CanvasErrorBoundary` falls back to the 2D graph if WebGL fails.
 *Why do we need it?* It is where real index evidence becomes explorable: file tree, symbol counts, modules, entry points and `file:line` symbol locations in Overview; mock reading order, plan status colors and packed-context tiers in the not-yet-implemented modes.
 *What breaks without it?* The product has data but no way to actually look at it.
 *Think of it as:* the control room where you watch and query the codebase.
