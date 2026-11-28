@@ -11,11 +11,10 @@ def send_email(to: str, subject: str, body: str) -> None:
     settings = get_settings()
     if not settings.SMTP_HOST:
         logger.warning(
-            "SMTP not configured; email not sent. Printing instead.\n"
-            "To: %s\nSubject: %s\n\n%s",
+            "SMTP not configured; email not sent. "
+            "To: %s | Subject: %s | Body omitted: contains a tokenized link.",
             to,
             subject,
-            body,
         )
         return
 

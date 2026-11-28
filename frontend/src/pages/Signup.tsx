@@ -2,7 +2,7 @@ import { motion, useAnimationControls } from 'framer-motion'
 import { ArrowRight, Check, Loader2, MailCheck, Send } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { AuthSplitLayout } from '@/components/auth/AuthSplitLayout'
 import { FloatingInput } from '@/components/auth/FloatingInput'
@@ -20,6 +20,7 @@ import { isValidEmail, passwordValid } from '@/lib/validation'
 export default function Signup() {
   const { signup } = useAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
   const controls = useAnimationControls()
 
   const [email, setEmail] = useState('')
@@ -59,10 +60,20 @@ export default function Signup() {
     }
     setSubmitting(true)
     try {
-      const message = await signup(email.trim(), password)
+      const result = await signup(email.trim(), password)
       setSuccess(true)
+      if (result.verification_required === false) {
+        toast({
+          title: 'Account created',
+          description: 'Email verification is off; you can log in.',
+          variant: 'success',
+        })
+        setSubmitting(false)
+        navigate('/login')
+        return
+      }
       toast({ title: 'Account created', description: 'Check your email to verify.', variant: 'success' })
-      window.setTimeout(() => setDone(message), 700)
+      window.setTimeout(() => setDone(result.message), 700)
     } catch (error) {
       setFormError(describeAuthError(error).message)
       setSubmitting(false)
@@ -88,7 +99,7 @@ export default function Signup() {
         title="Check your email"
         subtitle="One more step before you can log in."
         footer={
-          <Link to="/login" className="font-medium text-brand hover:underline">
+          <Link to="/login" className="rounded-sm font-medium text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             Back to log in
           </Link>
         }
@@ -98,7 +109,7 @@ export default function Signup() {
           animate={{ opacity: 1, scale: 1 }}
           className="space-y-4"
         >
-          <div className="relative grid size-12 place-items-center rounded-full bg-status-done/15 text-status-done glow-sm">
+          <div className="relative grid size-12 place-items-center rounded-full bg-status-done-tint text-status-done glow-sm">
             <MailCheck className="size-6" />
             <SuccessRipple show className="rounded-full" />
           </div>
@@ -145,7 +156,7 @@ export default function Signup() {
       footer={
         <>
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-brand hover:underline">
+          <Link to="/login" className="rounded-sm font-medium text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             Log in
           </Link>
         </>

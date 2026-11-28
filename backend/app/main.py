@@ -1,4 +1,6 @@
 import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -17,8 +19,45 @@ from app.features.indexing.router import router as indexing_router
 from app.features.plan.router import router as plan_router
 from app.features.reader.router import router as reader_router
 from app.features.repos.router import router as repos_router
+from app.pipeline.clone.cleanup import sweep_stale_clones
+from app.tasks import mark_stuck_repos_failed
 
 logger = logging.getLogger("app")
+
+VERIFICATION_DISABLED_WARNING = "Email verification is DISABLED (dev/demo mode)"
+
+
+def _check_verification_mode() -> None:
+    """Warn once at startup when verification is off; block production use."""
+    settings = get_settings()
+    if settings.REQUIRE_EMAIL_VERIFICATION:
+        return
+    deployment_env = (settings.APP_ENV or settings.ENV).strip().lower()
+    if deployment_env in {"production", "prod"}:
+        raise RuntimeError(
+            "REQUIRE_EMAIL_VERIFICATION=false is not allowed when "
+            "APP_ENV=production"
+        )
+    logger.warning(VERIFICATION_DISABLED_WARNING)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    _check_verification_mode()
+    try:
+        removed = sweep_stale_clones(get_settings().CLONE_STALE_MAX_AGE_SECONDS)
+        if removed:
+            logger.info("Swept %d stale clone folder(s) on startup", removed)
+    except Exception:
+        logger.exception("Stale clone sweep failed on startup")
+
+    try:
+        stuck = mark_stuck_repos_failed()
+        if stuck:
+            logger.info("Marked %d stuck repo(s) as failed on startup", stuck)
+    except Exception:
+        logger.exception("Stuck repo recovery failed on startup")
+    yield
 
 
 def _error_payload(
@@ -33,7 +72,7 @@ def _error_payload(
 def create_app() -> FastAPI:
     settings = get_settings()
 
-    app = FastAPI(title=settings.APP_NAME)
+    app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
     app.state.limiter = limiter
 
@@ -54,7 +93,12 @@ def create_app() -> FastAPI:
             content=_error_payload(
                 "validation_error",
                 "Request validation failed",
-                jsonable_encoder(exc.errors()),
+                jsonable_encoder(
+                    [
+                        {k: v for k, v in error.items() if k not in {"input", "ctx"}}
+                        for error in exc.errors()
+                    ]
+                ),
             ),
         )
 
@@ -73,7 +117,9 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=_error_payload("http_error", str(exc.detail)),
+            content=_error_payload(
+                getattr(exc, "code", "http_error"), str(exc.detail)
+            ),
             headers=getattr(exc, "headers", None),
         )
 

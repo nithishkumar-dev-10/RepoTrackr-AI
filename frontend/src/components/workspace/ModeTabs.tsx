@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
-import { BookOpen, ListChecks, Package } from 'lucide-react'
+import { BookOpen, LayoutDashboard, ListChecks, Package } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-export type WorkspaceMode = 'reader' | 'plan' | 'context'
+export type WorkspaceMode = 'overview' | 'reader' | 'plan' | 'context'
 
 export const WORKSPACE_MODES = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'reader', label: 'Reader', icon: BookOpen },
   { id: 'plan', label: 'Plan', icon: ListChecks },
   { id: 'context', label: 'Context', icon: Package },
@@ -25,8 +26,8 @@ export function ModeTabs({
   return (
     <div
       role="tablist"
-      aria-label="Query mode"
-      className="inline-flex items-center gap-1 rounded-xl border border-border bg-background p-1"
+      aria-label="Workspace view"
+      className="inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-border bg-background p-1"
     >
       {WORKSPACE_MODES.map(({ id, label, icon: Icon }) => {
         const active = value === id
@@ -37,7 +38,7 @@ export function ModeTabs({
             aria-selected={active}
             onClick={() => onChange(id)}
             className={cn(
-              'relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >

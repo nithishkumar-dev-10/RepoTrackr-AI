@@ -3,11 +3,13 @@
 @import './styles/glow.css';
 
 /*
-  RepoTrackr AI theme.
-  Light app shell, dark 3D canvas. Tokens are declared once here and mapped
-  into Tailwind utilities via @theme inline so classes like `bg-surface`,
-  `text-muted-foreground`, `bg-status-done` exist. The glow system (tokens and
-  utilities) lives in ./styles/glow.css.
+  RepoTrackr AI design tokens — the single CSS source of truth.
+  Light app shell, dark canvas. Tokens are mapped into Tailwind utilities via
+  @theme inline so `bg-surface`, `text-teal`, `bg-rose-tint`, `shadow-card`,
+  etc. all exist. src/lib/designTokens.ts mirrors these values for the places
+  CSS variables cannot reach (WebGL materials and SVG fills); keep both in
+  sync. The glow system lives in ./styles/glow.css.
+  All `ink` colors are WCAG AA (>= 4.5:1) on --background and --surface.
 */
 
 :root {
@@ -16,40 +18,65 @@
   /* Core surfaces */
   --background: #f6f7fb;
   --surface: #ffffff;
+  --surface-2: #f1f4fa;
   --foreground: #0b1020;
-  --muted: #f6f7fb;
+  --muted: #f1f4fa;
   --muted-foreground: #5b6478;
-  --border: #e4e7ef;
-  --input: #e4e7ef;
+  --border: #e2e7f0;
+  --input: #dce2ee;
   --ring: #3b5bff;
 
-  /* Dark canvas / hero / primary */
+  /* Dark canvas and primary CTA */
   --canvas: #0b1020;
-  --primary: #0b1020;
+  --canvas-soft: #131a2e;
+  --primary: #3b5bff;
   --primary-foreground: #ffffff;
 
-  /* Brand accent */
+  /* Brand indigo/blue */
   --brand: #3b5bff;
+  --brand-tint: #eef1ff;
   --brand-foreground: #ffffff;
-  --accent: #e8ecff;
-  --accent-foreground: #0b1020;
+  --accent: #eef1ff;
+  --accent-foreground: #1e2a5e;
+  --secondary: #eef1ff;
+  --secondary-foreground: #1e2a5e;
 
-  --secondary: #e8ecff;
-  --secondary-foreground: #0b1020;
+  /* Accents: ink text, matching tint surface */
+  --teal: #0f766e;
+  --teal-tint: #e6f7f4;
+  --violet: #6d28d9;
+  --violet-tint: #f3edff;
+  --amber: #b45309;
+  --amber-tint: #fff6e8;
+  --rose: #be123c;
+  --rose-tint: #fff0f3;
+  --emerald: #047857;
+  --emerald-tint: #eaf8f1;
+  --slate: #475569;
+  --slate-tint: #eef2f7;
 
-  --destructive: #ef4444;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
 
-  /* Plan / verification statuses */
-  --status-done: #16a34a;
-  --status-partial: #f59e0b;
-  --status-missing: #ef4444;
-  --status-unknown: #94a3b8;
+  /* Statuses share the accent hue families (AA ink values). */
+  --status-done: #047857;
+  --status-done-tint: #eaf8f1;
+  --status-partial: #b45309;
+  --status-partial-tint: #fff6e8;
+  --status-missing: #be123c;
+  --status-missing-tint: #fff0f3;
+  --status-unknown: #475569;
+  --status-unknown-tint: #eef2f7;
+
+  /* Elevation */
+  --elevation-card: 0 1px 2px rgba(11, 16, 32, 0.05), 0 8px 24px -16px rgba(11, 16, 32, 0.28);
+  --elevation-card-hover: 0 2px 4px rgba(11, 16, 32, 0.06), 0 16px 32px -18px rgba(59, 91, 255, 0.38);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -58,13 +85,28 @@
   --color-ring: var(--ring);
 
   --color-canvas: var(--canvas);
+  --color-canvas-soft: var(--canvas-soft);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
 
   --color-brand: var(--brand);
+  --color-brand-tint: var(--brand-tint);
   --color-brand-foreground: var(--brand-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+
+  --color-teal: var(--teal);
+  --color-teal-tint: var(--teal-tint);
+  --color-violet: var(--violet);
+  --color-violet-tint: var(--violet-tint);
+  --color-amber: var(--amber);
+  --color-amber-tint: var(--amber-tint);
+  --color-rose: var(--rose);
+  --color-rose-tint: var(--rose-tint);
+  --color-emerald: var(--emerald);
+  --color-emerald-tint: var(--emerald-tint);
+  --color-slate: var(--slate);
+  --color-slate-tint: var(--slate-tint);
 
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -73,9 +115,16 @@
   --color-destructive-foreground: var(--destructive-foreground);
 
   --color-status-done: var(--status-done);
+  --color-status-done-tint: var(--status-done-tint);
   --color-status-partial: var(--status-partial);
+  --color-status-partial-tint: var(--status-partial-tint);
   --color-status-missing: var(--status-missing);
+  --color-status-missing-tint: var(--status-missing-tint);
   --color-status-unknown: var(--status-unknown);
+  --color-status-unknown-tint: var(--status-unknown-tint);
+
+  --shadow-card: var(--elevation-card);
+  --shadow-card-hover: var(--elevation-card-hover);
 
   --font-sans:
     'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;

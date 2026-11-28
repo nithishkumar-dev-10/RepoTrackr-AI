@@ -30,8 +30,8 @@ export function CitationChip({
           className={cn(
             'inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-xs transition-[color,border-color,box-shadow] duration-200',
             active
-              ? 'border-brand/40 bg-accent text-brand glow-sm'
-              : 'border-border bg-surface text-muted-foreground hover:border-brand/40 hover:text-brand hover:glow-sm',
+              ? 'border-teal/40 bg-teal-tint text-teal glow-sm'
+              : 'border-border bg-surface text-muted-foreground hover:border-teal/40 hover:bg-teal-tint hover:text-teal hover:glow-sm',
             className,
           )}
           title={label}

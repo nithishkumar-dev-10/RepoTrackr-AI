@@ -6,7 +6,11 @@ import { MiniGraphThumb } from '@/components/dashboard/MiniGraphThumb'
 import { SpotlightCard } from '@/components/SpotlightCard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { mapRepoStatus, REPO_STATUS_LABEL } from '@/api/repos'
+import {
+  isRepoStatusActive,
+  mapRepoStatus,
+  REPO_STATUS_LABEL,
+} from '@/api/repos'
 import { cn } from '@/lib/utils'
 import type { Repo, UiRepoStatus } from '@/types'
 
@@ -15,24 +19,34 @@ const STATUS_STYLE: Record<
   { chip: string; dot: string; glow: string }
 > = {
   not_indexed: {
-    chip: 'border-transparent bg-status-unknown/20 text-muted-foreground',
+    chip: 'border-transparent bg-status-unknown-tint text-status-unknown',
     dot: 'bg-status-unknown',
-    glow: 'rgba(148,163,184,0.5)',
+    glow: 'rgba(71,85,105,0.5)',
+  },
+  queued: {
+    chip: 'border-transparent bg-status-partial-tint text-status-partial',
+    dot: 'bg-status-partial',
+    glow: 'rgba(180,83,9,0.55)',
+  },
+  cloning: {
+    chip: 'border-transparent bg-status-partial-tint text-status-partial',
+    dot: 'bg-status-partial',
+    glow: 'rgba(180,83,9,0.55)',
   },
   indexing: {
-    chip: 'border-transparent bg-status-partial/15 text-status-partial',
+    chip: 'border-transparent bg-status-partial-tint text-status-partial',
     dot: 'bg-status-partial',
-    glow: 'rgba(245,158,11,0.55)',
+    glow: 'rgba(180,83,9,0.55)',
   },
   ready: {
-    chip: 'border-transparent bg-status-done/15 text-status-done',
+    chip: 'border-transparent bg-status-done-tint text-status-done',
     dot: 'bg-status-done',
-    glow: 'rgba(22,163,74,0.5)',
+    glow: 'rgba(4,120,87,0.5)',
   },
-  error: {
-    chip: 'border-transparent bg-status-missing/15 text-status-missing',
+  failed: {
+    chip: 'border-transparent bg-status-missing-tint text-status-missing',
     dot: 'bg-status-missing',
-    glow: 'rgba(239,68,68,0.5)',
+    glow: 'rgba(190,18,60,0.5)',
   },
 }
 
@@ -47,8 +61,9 @@ export function RepoCard({
   onOpen: () => void
   onIndex: () => void
 }) {
-  const status = indexState === 'indexing' ? 'indexing' : mapRepoStatus(repo.status)
+  const status = mapRepoStatus(repo.status)
   const style = STATUS_STYLE[status]
+  const active = isRepoStatusActive(repo.status) || indexState === 'indexing'
 
   return (
     <motion.div
@@ -57,7 +72,7 @@ export function RepoCard({
         show: { opacity: 1, y: 0 },
       }}
       transition={{ duration: 0.45, ease: 'easeOut' }}
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -4, transition: { duration: 0.2 } }}
     >
       <SpotlightCard className="flex h-full flex-col">
         <div className="relative h-32 overflow-hidden rounded-t-2xl bg-canvas">
@@ -68,7 +83,7 @@ export function RepoCard({
               className={cn(
                 'pulse-dot size-1.5 rounded-full',
                 style.dot,
-                status === 'indexing' && 'animate-pulse',
+                active && 'animate-pulse',
               )}
               style={{ '--glow-soft': style.glow } as CSSProperties}
             />
@@ -98,7 +113,7 @@ export function RepoCard({
               variant="outline"
               size="sm"
               onClick={onIndex}
-              disabled={indexState === 'indexing'}
+              disabled={active}
             >
               {indexState === 'indexing' ? (
                 <Loader2 className="size-4 animate-spin" />

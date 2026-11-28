@@ -1,4 +1,5 @@
 import { request } from '@/api/client'
+import { getRefreshToken } from '@/lib/tokenStorage'
 import type {
   ChangePasswordRequest,
   ForgotPasswordRequest,
@@ -7,6 +8,7 @@ import type {
   ResendVerificationRequest,
   ResetPasswordRequest,
   SignupRequest,
+  SignupResponse,
   TokenResponse,
   User,
   VerifyEmailRequest,
@@ -17,18 +19,20 @@ import type {
  * Public calls send no bearer token; session calls require one.
  */
 
-/** POST /auth/signup — creates an account and emails a verification link.
- *  Returns a message only (201); it does NOT log the user in. */
-export function signup(payload: SignupRequest): Promise<MessageResponse> {
-  return request<MessageResponse>('/auth/signup', {
+/** POST /auth/signup — creates an account. By default it emails a verification
+ *  link and does NOT log the user in. When the backend has verification
+ *  disabled, the response carries `verification_required: false`. */
+export function signup(payload: SignupRequest): Promise<SignupResponse> {
+  return request<SignupResponse>('/auth/signup', {
     method: 'POST',
     body: payload,
     auth: false,
   })
 }
 
-/** POST /auth/login — returns the access/refresh pair. A 403 means the
- *  email is not verified yet. */
+/** POST /auth/login — returns the access/refresh pair. An unverified email
+ *  is still a neutral 401; it is identified by `error.code ===
+ *  'email_not_verified'` (see `describeAuthError`). */
 export function login(payload: LoginRequest): Promise<TokenResponse> {
   return request<TokenResponse>('/auth/login', {
     method: 'POST',
@@ -62,9 +66,12 @@ export function me(): Promise<User> {
   return request<User>('/auth/me')
 }
 
-/** POST /auth/logout — server-side no-op; the client clears tokens. */
+/** POST /auth/logout — revokes the refresh token, then the client clears tokens. */
 export function logout(): Promise<MessageResponse> {
-  return request<MessageResponse>('/auth/logout', { method: 'POST' })
+  return request<MessageResponse>('/auth/logout', {
+    method: 'POST',
+    body: { refresh_token: getRefreshToken() },
+  })
 }
 
 /** POST /auth/forgot-password — always returns a generic message. */

@@ -32,7 +32,8 @@ Every error returns the same envelope (defined in `backend/app/schemas/common.py
 |---|---|---|
 | 400 | `http_error` | Bad/expired/used token or malformed request logic |
 | 401 | `http_error` | Missing/invalid credentials or token |
-| 403 | `http_error` | Authenticated but not allowed (e.g. email not verified) |
+| 401 | `email_not_verified` | `/auth/login` only when `REQUIRE_EMAIL_VERIFICATION=true`: the password matched but the email is unverified; message stays neutral |
+| 403 | `http_error` | Authenticated but not allowed |
 | 404 | `http_error` | Resource not found |
 | 409 | `http_error` | Conflict (duplicate email or duplicate repo) |
 | 422 | `validation_error` | Request body/params failed validation (`details` holds the field errors) |
@@ -59,29 +60,32 @@ Validated on `SignupRequest`, `ResetPasswordRequest.new_password`, `ChangePasswo
 
 | Method | Path | Auth | Request | Success | Errors |
 |---|---|---|---|---|---|
-| POST | `/auth/signup` | no | `SignupRequest` | 201 `MessageResponse` | 422, 409, 429 |
-| POST | `/auth/verify-email` | no | `VerifyEmailRequest` | 200 `MessageResponse` | 400, 422 |
+| POST | `/auth/signup` | no | `SignupRequest` | 201 `SignupResponse` | 422, 429 |
+| POST | `/auth/verify-email` | no | `VerifyEmailRequest` | 200 `MessageResponse` | 400, 422, 429 |
 | POST | `/auth/resend-verification` | no | `ResendVerificationRequest` | 200 `MessageResponse` | 422, 429 |
-| POST | `/auth/login` | no | `LoginRequest` | 200 `TokenResponse` | 401, 403, 422, 429 |
-| POST | `/auth/refresh` | no | `RefreshRequest` | 200 `TokenResponse` | 401, 422 |
-| POST | `/auth/logout` | yes | — | 200 `MessageResponse` | 401 |
+| POST | `/auth/login` | no | `LoginRequest` | 200 `TokenResponse` | 401, 422, 429 |
+| POST | `/auth/refresh` | no | `RefreshRequest` | 200 `TokenResponse` | 401, 422, 429 |
+| POST | `/auth/logout` | yes | `LogoutRequest` (optional `refresh_token`) | 200 `MessageResponse` | 401, 422, 429 |
 | GET | `/auth/me` | yes | — | 200 `UserOut` | 401 |
 | POST | `/auth/forgot-password` | no | `ForgotPasswordRequest` | 200 `MessageResponse` | 422, 429 |
-| POST | `/auth/reset-password` | no | `ResetPasswordRequest` | 200 `MessageResponse` | 400, 422 |
-| POST | `/auth/change-password` | yes | `ChangePasswordRequest` | 200 `MessageResponse` | 400, 401, 422 |
+| POST | `/auth/reset-password` | no | `ResetPasswordRequest` | 200 `MessageResponse` | 400, 422, 429 |
+| POST | `/auth/change-password` | yes | `ChangePasswordRequest` | 200 `MessageResponse` | 400, 401, 422, 429 |
 | DELETE | `/auth/account` | yes | — | 200 `MessageResponse` | 401 |
 
 Notes:
-- `POST /auth/signup` creates the user unverified and triggers a verification email. 409 if the email already exists.
-- `POST /auth/login` returns 403 while the email is unverified (use resend-verification).
-- `POST /auth/refresh` accepts only a refresh token; an access token is rejected with 401. A new access + refresh pair is returned.
-- `POST /auth/logout` is **client-side only**: there is no server-side token revocation table, so the client discards its tokens. The endpoint just confirms success.
+- With `REQUIRE_EMAIL_VERIFICATION=true` (the default), `POST /auth/signup` creates the user unverified and triggers a verification email. Duplicate emails return the same neutral 201 message and receive a fresh verification email instead of a 409. The 201 body is `{"message": "..."}`.
+- With `REQUIRE_EMAIL_VERIFICATION=false` (dev/demo only), signup creates a verified user, sends no email, and returns `{"message": "Account created. Email verification is disabled; you can log in.", "verification_required": false}`. The frontend uses `verification_required === false` to skip the "Check your email" page and send the user to login. Duplicate signup also returns this body without sending mail.
+- `POST /auth/login` returns the same 401 and the same message for unknown email, wrong password and unverified accounts. An unverified account is distinguished only by `error.code == "email_not_verified"` (unknown/bad credentials use `http_error`); the frontend uses that code to offer resend-verification without changing the neutral response text. An unverified user's access token is also rejected with 401 `http_error` by `get_current_user`. When verification is disabled, login never returns `email_not_verified` and `get_current_user` no longer rejects users solely for being unverified.
+- `POST /auth/verify-email` and `POST /auth/resend-verification` still return 200 when verification is disabled, with `{"message": "Email verification is disabled (dev/demo mode)."}` and no token/email side effects. Startup logs `Email verification is DISABLED (dev/demo mode)` once; `APP_ENV=production` (or `ENV=prod`) with the flag false refuses to start.
+- `POST /auth/refresh` accepts only a refresh token; an access token, an unknown token, a revoked token, or an expired token is rejected with 401. Refresh JWTs carry a random `jti`; the stored row is consumed once with a conditional update, the old token can never be reused, and revoked rows are never reactivated.
+- `POST /auth/logout` revokes the presented refresh token server-side when `refresh_token` is supplied; without a body it only confirms success. The client still discards its local tokens.
 - `POST /auth/forgot-password` always returns the same 200 body, whether or not the email exists (prevents account enumeration); the reset email is sent in the background so it does not leak timing.
 - `POST /auth/verify-email` and `/auth/reset-password` fail with 400 for expired, used, or invalid tokens.
-- `POST /auth/reset-password` applies the password rule to `new_password` (422 if weak).
-- `POST /auth/change-password` returns 400 if the current password is wrong, or if the new password is the same as the current one.
-- `DELETE /auth/account` deletes the user and cascades to their `email_tokens` and `repos`.
-- Rate limiting applies to `POST /auth/signup`, `/auth/login`, `/auth/forgot-password`, and `/auth/resend-verification`: exceeding the per-IP limit returns 429 `http_error` `"Too many requests"`. Limits are configurable via `RATE_LIMIT_*` env vars (see `.env.example`).
+- `POST /auth/reset-password` applies the password rule to `new_password` (422 if weak), revokes all refresh tokens and invalidates every unused RESET token.
+- `POST /auth/change-password` returns 400 if the current password is wrong, or if the new password is the same as the current one. It also revokes all of the user's refresh tokens and invalidates every unused RESET token.
+- `DELETE /auth/account` revokes the user's refresh tokens, then deletes the user and cascades to their `email_tokens` and `repos`.
+- Rate limiting applies to `POST /auth/signup`, `/auth/login`, `/auth/forgot-password`, `/auth/resend-verification`, `/auth/verify-email`, `/auth/refresh`, `/auth/reset-password`, `/auth/change-password`, and `/auth/logout`: exceeding the per-IP limit returns 429 `http_error` `"Too many requests"`. Limits are configurable via `RATE_LIMIT_*` env vars (see `.env.example`). The limiter is in-process and assumes a single uvicorn process.
+- Validation errors return `422 validation_error` with `loc`, `msg` and `type` only; `input` and `ctx` are removed so submitted values are never echoed.
 
 ### Repos
 
@@ -101,15 +105,16 @@ Notes:
 
 ---
 
-## Part 2 — Pipeline (not_implemented)
+## Part 2 — Pipeline (live)
 
-Stub responses: **501** with body `{"status": "not_implemented"}`. These routes are registered now. Each requires `Authorization: Bearer <access_token>` (401 without it) and verifies the repo belongs to the caller first, so a foreign or missing repo returns the same 404 `"Repo not found"` as the live repo routes.
+Each route requires `Authorization: Bearer <access_token>` (401 without it) and verifies the repo belongs to the caller first, so a foreign or missing repo returns the same 404 `"Repo not found"` as the live repo routes. `repo_id` path validation failures return 422. `status` moves through `queued`, `cloning`, `indexing`, `ready` and `failed`; `error_message` is the last failure text or null.
 
-| Method | Path | Auth | Request | Success (stub) | Errors |
-|---|---|---|---|---|---|
-| POST | `/repos/{repo_id}/index` | yes | — | 501 `{"status": "not_implemented"}` | 401, 404 |
-| GET | `/repos/{repo_id}/index/status` | yes | — | 501 | 401, 404 |
-| GET | `/repos/{repo_id}/index/summary` | yes | — | 501 | 401, 404 |
+| Method | Path | Request | Success | Errors |
+|---|---|---|---|---|
+| POST | `/repos/{repo_id}/index` | — | 202 `{"status": "queued", "message": "Indexing queued."}`; the clone/parse run continues as a background task | 401, 404, 409 `http_error` `"Indexing is already <status> for this repo."` when already `queued`/`cloning`/`indexing`, 422 |
+| GET | `/repos/{repo_id}/index/status` | — | 200 `{"status": "...", "commit_sha": null or str, "error_message": null or str}` | 401, 404, 422 |
+| GET | `/repos/{repo_id}/index/summary` | — | 200 `IndexSummaryOut`: `commit_sha`, `file_tree`, `symbol_counts`, `total_symbols`, `modules`, `entry_points`, `symbols` (`name`, `kind`, `file`, `line_start`, `line_end`, optional `signature`, `docstring`, `parent`), `files_indexed`, `files_parsed`, `files_cached`, `files_skipped`, `graph_node_count`, `graph_edge_count`, `graph_nodes`, `graph_edges`, `centrality` (`module`, `in_degree`, `pagerank`, `score`), `lines_of_code`, `index_seconds`, `seconds_per_10k_loc` | 401, 404, 409 `http_error` `"Index is not ready."`, 500 `internal_error` `"Stored index summary is invalid."`, 422 |
+| GET | `/repos/{repo_id}/graph` | — | 200 `GraphOut`: `nodes` (`id`, `label`, `kind`, `cluster`, `centrality`, `file`, `line`, `isEntry`), `edges` (`source`, `target`, `type`), `clusters` (`id`, `label`), `truncated`; mapped from the stored `build_graph()` result, capped at 300 nodes / 1000 edges | 401, 404, 409 `http_error` `"Index is not ready."`, 500 `internal_error` `"Stored index summary is invalid."`, 422 |
 
 ---
 
@@ -152,6 +157,7 @@ Stub responses: **501** with body `{"status": "not_implemented"}`. `GET /repos/{
 | `LoginRequest` | `auth.py` | `email`, `password` |
 | `TokenResponse` | `auth.py` | `access_token`, `refresh_token`, `token_type` (`"bearer"`) |
 | `RefreshRequest` | `auth.py` | `refresh_token` |
+| `LogoutRequest` | `auth.py` | `refresh_token` (optional) |
 | `VerifyEmailRequest` | `auth.py` | `token` |
 | `ResendVerificationRequest` | `auth.py` | `email` |
 | `ForgotPasswordRequest` | `auth.py` | `email` |

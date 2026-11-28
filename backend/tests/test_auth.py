@@ -61,13 +61,13 @@ def test_signup_normalizes_email_case(client, db_session):
     assert user is not None
 
 
-def test_signup_duplicate_email_conflict(client):
+def test_signup_duplicate_email_returns_neutral_response(client, sent_emails):
     assert _signup(client).status_code == 201
 
     response = _signup(client)
 
-    assert response.status_code == 409
-    assert response.json()["error"]["message"] == "Email is already registered"
+    assert response.status_code == 201
+    assert response.json()["message"] == "Account created. Check your email to verify your account."
 
 
 def test_signup_weak_password_validation_error(client):
@@ -159,13 +159,14 @@ def test_resend_verification_for_verified_user_sends_nothing(client, sent_emails
 # --- login ---
 
 
-def test_login_before_verification_forbidden(client):
+def test_login_before_verification_returns_generic_401(client):
     _signup(client)
 
     response = _login(client)
 
-    assert response.status_code == 403
-    assert "not verified" in response.json()["error"]["message"]
+    assert response.status_code == 401
+    assert response.json()["error"]["message"] == "Invalid email or password"
+    assert response.json()["error"]["code"] == "email_not_verified"
 
 
 def test_login_after_verification_returns_tokens(client, sent_emails):
@@ -187,12 +188,14 @@ def test_login_wrong_password_unauthorized(client, sent_emails):
 
     assert response.status_code == 401
     assert response.json()["error"]["message"] == "Invalid email or password"
+    assert response.json()["error"]["code"] == "http_error"
 
 
 def test_login_unknown_email_unauthorized(client):
     response = _login(client, email="nobody@example.com")
 
     assert response.status_code == 401
+    assert response.json()["error"]["code"] == "http_error"
 
 
 # --- /me ---
@@ -286,6 +289,34 @@ def test_refresh_expired_token_unauthorized(client, sent_emails, monkeypatch):
     assert response.status_code == 401
 
 
+def test_refresh_rotates_token_and_rejects_old_token(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    first = _login(client).json()
+
+    rotated = client.post(
+        "/auth/refresh", json={"refresh_token": first["refresh_token"]}
+    )
+
+    assert rotated.status_code == 200
+    assert rotated.json()["refresh_token"] != first["refresh_token"]
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": first["refresh_token"]}
+        ).status_code
+        == 401
+    )
+
+
+def test_refresh_rejects_valid_untracked_refresh_token(client, sent_emails, db_session):
+    _signup_and_verify(client, sent_emails)
+    user = db_session.scalar(select(User).where(User.email == EMAIL))
+    untracked = create_refresh_token(user.id)
+
+    response = client.post("/auth/refresh", json={"refresh_token": untracked})
+
+    assert response.status_code == 401
+
+
 # --- logout ---
 
 
@@ -302,6 +333,25 @@ def test_logout_without_auth_unauthorized(client):
     response = client.post("/auth/logout")
 
     assert response.status_code == 401
+
+
+def test_logout_revokes_refresh_token(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    tokens = _login(client).json()
+
+    response = client.post(
+        "/auth/logout",
+        json={"refresh_token": tokens["refresh_token"]},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 401
+    )
 
 
 # --- forgot-password ---
@@ -358,6 +408,8 @@ def test_reset_password_used_token_rejected(client, sent_emails, sent_reset_emai
     )
 
     assert response.status_code == 400
+    assert _login(client, password="newsecret123").status_code == 200
+    assert _login(client, password="another123").status_code == 401
 
 
 def test_reset_password_expired_token_rejected(
@@ -457,6 +509,25 @@ def test_change_password_requires_auth(client):
     assert response.status_code == 401
 
 
+def test_change_password_revokes_refresh_tokens(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    tokens = _login(client).json()
+
+    response = client.post(
+        "/auth/change-password",
+        json={"current_password": PASSWORD, "new_password": "newsecret123"},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 401
+    )
+
+
 # --- delete account ---
 
 
@@ -468,6 +539,24 @@ def test_delete_account_then_login_fails(client, sent_emails):
     assert response.status_code == 200
     assert response.json() == {"message": "Account deleted."}
     assert _login(client).status_code == 401
+
+
+def test_delete_account_revokes_refresh_tokens(client, sent_emails):
+    _signup_and_verify(client, sent_emails)
+    tokens = _login(client).json()
+
+    response = client.delete(
+        "/auth/account",
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+
+    assert response.status_code == 200
+    assert (
+        client.post(
+            "/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
+        ).status_code
+        == 401
+    )
 
 
 def test_delete_account_requires_auth(client):

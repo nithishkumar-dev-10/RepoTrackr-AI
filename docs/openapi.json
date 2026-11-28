@@ -78,7 +78,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
+                  "$ref": "#/components/schemas/SignupResponse"
                 }
               }
             }
@@ -267,6 +267,23 @@
         ],
         "summary": "Logout",
         "operationId": "logout_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LogoutRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -274,6 +291,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -631,7 +658,7 @@
     "/repos/{repo_id}/index": {
       "post": {
         "tags": [
-          "stubs"
+          "indexing"
         ],
         "summary": "Start Index",
         "operationId": "start_index_repos__repo_id__index_post",
@@ -652,16 +679,12 @@
           }
         ],
         "responses": {
-          "501": {
+          "202": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Start Index Repos  Repo Id  Index Post"
+                  "$ref": "#/components/schemas/IndexStartOut"
                 }
               }
             }
@@ -682,7 +705,7 @@
     "/repos/{repo_id}/index/status": {
       "get": {
         "tags": [
-          "stubs"
+          "indexing"
         ],
         "summary": "Index Status",
         "operationId": "index_status_repos__repo_id__index_status_get",
@@ -703,16 +726,12 @@
           }
         ],
         "responses": {
-          "501": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Index Status Repos  Repo Id  Index Status Get"
+                  "$ref": "#/components/schemas/IndexStatusOut"
                 }
               }
             }
@@ -733,7 +752,7 @@
     "/repos/{repo_id}/index/summary": {
       "get": {
         "tags": [
-          "stubs"
+          "indexing"
         ],
         "summary": "Index Summary",
         "operationId": "index_summary_repos__repo_id__index_summary_get",
@@ -754,16 +773,60 @@
           }
         ],
         "responses": {
-          "501": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Index Summary Repos  Repo Id  Index Summary Get"
+                  "$ref": "#/components/schemas/IndexSummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repos/{repo_id}/graph": {
+      "get": {
+        "tags": [
+          "indexing"
+        ],
+        "summary": "Index Graph",
+        "description": "Serve the deterministic graph built by build_graph() to the workspace UI.",
+        "operationId": "index_graph_repos__repo_id__graph_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Repo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphOut"
                 }
               }
             }
@@ -1132,6 +1195,34 @@
         ],
         "title": "Body_upload_plan_repos__repo_id__plan_post"
       },
+      "CentralityOut": {
+        "properties": {
+          "module": {
+            "type": "string",
+            "title": "Module"
+          },
+          "in_degree": {
+            "type": "integer",
+            "title": "In Degree",
+            "default": 0
+          },
+          "pagerank": {
+            "type": "number",
+            "title": "Pagerank",
+            "default": 0.0
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "module"
+        ],
+        "title": "CentralityOut"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "current_password": {
@@ -1164,6 +1255,180 @@
         ],
         "title": "ForgotPasswordRequest"
       },
+      "GraphClusterOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "GraphClusterOut"
+      },
+      "GraphEdgeOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "kind"
+        ],
+        "title": "GraphEdgeOut"
+      },
+      "GraphNodeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "file": {
+            "type": "string",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "file"
+        ],
+        "title": "GraphNodeOut",
+        "description": "A node as produced by build_graph() and persisted in the summary."
+      },
+      "GraphOut": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphViewNode"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphViewEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          },
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/GraphClusterOut"
+            },
+            "type": "array",
+            "title": "Clusters"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "GraphOut"
+      },
+      "GraphViewEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "type"
+        ],
+        "title": "GraphViewEdge"
+      },
+      "GraphViewNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "cluster": {
+            "type": "string",
+            "title": "Cluster"
+          },
+          "centrality": {
+            "type": "number",
+            "title": "Centrality"
+          },
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "line": {
+            "type": "integer",
+            "title": "Line"
+          },
+          "isEntry": {
+            "type": "boolean",
+            "title": "Isentry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind",
+          "cluster",
+          "centrality",
+          "file",
+          "line",
+          "isEntry"
+        ],
+        "title": "GraphViewNode",
+        "description": "Frontend GraphNode contract from frontend/src/types/graph.ts."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1176,6 +1441,246 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "IndexStartOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "title": "IndexStartOut"
+      },
+      "IndexStatusOut": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "IndexStatusOut"
+      },
+      "IndexSummaryOut": {
+        "properties": {
+          "commit_sha": {
+            "type": "string",
+            "title": "Commit Sha"
+          },
+          "file_tree": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "File Tree"
+          },
+          "symbol_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Symbol Counts"
+          },
+          "total_symbols": {
+            "type": "integer",
+            "title": "Total Symbols",
+            "default": 0
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modules"
+          },
+          "entry_points": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Entry Points"
+          },
+          "symbols": {
+            "items": {
+              "$ref": "#/components/schemas/IndexSymbolOut"
+            },
+            "type": "array",
+            "title": "Symbols"
+          },
+          "files_indexed": {
+            "type": "integer",
+            "title": "Files Indexed",
+            "default": 0
+          },
+          "files_parsed": {
+            "type": "integer",
+            "title": "Files Parsed",
+            "default": 0
+          },
+          "files_cached": {
+            "type": "integer",
+            "title": "Files Cached",
+            "default": 0
+          },
+          "files_skipped": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Files Skipped"
+          },
+          "graph_node_count": {
+            "type": "integer",
+            "title": "Graph Node Count",
+            "default": 0
+          },
+          "graph_edge_count": {
+            "type": "integer",
+            "title": "Graph Edge Count",
+            "default": 0
+          },
+          "graph_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNodeOut"
+            },
+            "type": "array",
+            "title": "Graph Nodes"
+          },
+          "graph_edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdgeOut"
+            },
+            "type": "array",
+            "title": "Graph Edges"
+          },
+          "centrality": {
+            "items": {
+              "$ref": "#/components/schemas/CentralityOut"
+            },
+            "type": "array",
+            "title": "Centrality"
+          },
+          "lines_of_code": {
+            "type": "integer",
+            "title": "Lines Of Code",
+            "default": 0
+          },
+          "index_seconds": {
+            "type": "number",
+            "title": "Index Seconds",
+            "default": 0.0
+          },
+          "seconds_per_10k_loc": {
+            "type": "number",
+            "title": "Seconds Per 10K Loc",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "commit_sha"
+        ],
+        "title": "IndexSummaryOut"
+      },
+      "IndexSymbolOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "line_start": {
+            "type": "integer",
+            "title": "Line Start"
+          },
+          "line_end": {
+            "type": "integer",
+            "title": "Line End"
+          },
+          "signature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signature"
+          },
+          "docstring": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docstring"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "file",
+          "line_start",
+          "line_end"
+        ],
+        "title": "IndexSymbolOut"
       },
       "LoginRequest": {
         "properties": {
@@ -1195,6 +1700,23 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "LogoutRequest": {
+        "properties": {
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "title": "LogoutRequest"
       },
       "MessageResponse": {
         "properties": {
@@ -1273,6 +1795,28 @@
             "type": "string",
             "title": "Status"
           },
+          "commit_sha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit Sha"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -1340,6 +1884,31 @@
           "password"
         ],
         "title": "SignupRequest"
+      },
+      "SignupResponse": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "verification_required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Required"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "SignupResponse",
+        "description": "Message plus an optional flag, omitted when verification is required."
       },
       "StubQueryRequest": {
         "properties": {

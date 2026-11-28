@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     APP_NAME: str = "RepoTrackr AI"
     ENV: Literal["dev", "prod"] = "dev"
+    APP_ENV: str = "dev"
 
     DATABASE_URL: str = "sqlite:///./repotrackr.db"
     SECRET_KEY: str
@@ -25,11 +26,18 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     VERIFY_TOKEN_EXPIRE_HOURS: int = 24
     RESET_TOKEN_EXPIRE_MINUTES: int = 30
+    # Secure default: keep verification on unless explicitly disabled for dev/demo.
+    REQUIRE_EMAIL_VERIFICATION: bool = True
 
     RATE_LIMIT_LOGIN: str = "5/minute"
     RATE_LIMIT_SIGNUP: str = "10/minute"
     RATE_LIMIT_FORGOT_PASSWORD: str = "5/minute"
     RATE_LIMIT_RESEND_VERIFICATION: str = "5/minute"
+    RATE_LIMIT_REFRESH: str = "10/minute"
+    RATE_LIMIT_VERIFY_EMAIL: str = "10/minute"
+    RATE_LIMIT_RESET_PASSWORD: str = "10/minute"
+    RATE_LIMIT_CHANGE_PASSWORD: str = "10/minute"
+    RATE_LIMIT_LOGOUT: str = "10/minute"
 
     FRONTEND_URL: str = "http://localhost:3000"
     CORS_ORIGINS: Annotated[list[str], NoDecode] = []
@@ -44,6 +52,7 @@ class Settings(BaseSettings):
     CLONE_ROOT: str = "data/clones"
     CLONE_MAX_SIZE_MB: int = 200
     CLONE_TIMEOUT_SECONDS: int = 120
+    CLONE_STALE_MAX_AGE_SECONDS: int = 3600
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -56,7 +65,19 @@ class Settings(BaseSettings):
             return [str(origin).strip() for origin in value if str(origin).strip()]
         return [str(value)]
 
+    @field_validator("CORS_ORIGINS")
+    @classmethod
+    def _reject_wildcard_origins(cls, value: list[str]) -> list[str]:
+        if "*" in value:
+            raise ValueError("CORS_ORIGINS cannot contain '*' with credentials")
+        return value
+
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def verification_required() -> bool:
+    """Single read of the email-verification flag shared by auth and guards."""
+    return get_settings().REQUIRE_EMAIL_VERIFICATION

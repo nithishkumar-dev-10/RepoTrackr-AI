@@ -6,7 +6,10 @@ import { uploadPlan } from '@/api/galaxy'
 import { CitationChip } from '@/components/CitationChip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { StatusDonut } from '@/components/ui/StatusDonut'
 import { useToast } from '@/context/ToastContext'
+import { hues, STATUS_HUE } from '@/lib/designTokens'
 import { cn } from '@/lib/utils'
 import { PLAN_STATUS_META } from '@/lib/planStatus'
 import type { PlanItemStatus, QueryResponse } from '@/types'
@@ -60,16 +63,11 @@ export function PlanPanel({
     },
     { done: 0, partial: 0, missing: 0, unknown: 0 },
   )
-  const total = items.length || 1
-
-  let cursor = 0
-  const stops = RING_ORDER.map((status) => {
-    const start = (cursor / total) * 100
-    cursor += counts[status]
-    const end = (cursor / total) * 100
-    return `${PLAN_STATUS_META[status].color} ${start}% ${end}%`
-  })
-  const gradient = `conic-gradient(from -90deg, ${stops.join(', ')})`
+  const segments = RING_ORDER.map((status) => ({
+    label: PLAN_STATUS_META[status].label,
+    color: PLAN_STATUS_META[status].color,
+    value: counts[status],
+  }))
 
   async function onFile(file: File) {
     setUploading(true)
@@ -78,7 +76,7 @@ export function PlanPanel({
       toast({
         title:
           result.data.status === 'not_implemented'
-            ? 'Plan uploaded (Demo data)'
+            ? 'Plan uploaded (Not implemented yet)'
             : 'Plan uploaded',
         description: file.name,
         variant: 'info',
@@ -108,44 +106,36 @@ export function PlanPanel({
         </p>
         {demo ? (
           <Badge variant="outline" className="font-mono">
-            Demo data
+            Not implemented yet
           </Badge>
         ) : null}
       </div>
 
-      <div className="flex items-center gap-4 rounded-xl border border-border bg-background p-4">
-        <div
-          className="relative grid size-20 shrink-0 place-items-center rounded-full"
-          style={{
-            background: gradient,
-            boxShadow: '0 0 22px -4px rgba(59,91,255,0.5)',
-          }}
-          aria-hidden
-        >
-          <div className="grid size-12 place-items-center rounded-full bg-background">
-            <span className="text-lg font-semibold text-foreground">{items.length}</span>
+      <Card accent="violet" className="p-4">
+        <div className="flex items-center gap-4">
+          <StatusDonut
+            segments={segments}
+            total={items.length}
+            centerLabel={items.length}
+          />
+          <div className="grid flex-1 grid-cols-2 gap-2">
+            {RING_ORDER.map((status) => (
+              <div key={status} className="flex items-center gap-2">
+                <span
+                  className="size-2.5 rounded-full"
+                  style={{ backgroundColor: PLAN_STATUS_META[status].color }}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {PLAN_STATUS_META[status].label}
+                </span>
+                <span className="ml-auto text-xs font-medium text-foreground">
+                  {counts[status]}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="grid flex-1 grid-cols-2 gap-2">
-          {RING_ORDER.map((status) => (
-            <div key={status} className="flex items-center gap-2">
-              <span
-                className="size-2.5 rounded-full"
-                style={{
-                  backgroundColor: PLAN_STATUS_META[status].color,
-                  boxShadow: `0 0 8px 1px ${PLAN_STATUS_META[status].color}`,
-                }}
-              />
-              <span className="text-xs text-muted-foreground">
-                {PLAN_STATUS_META[status].label}
-              </span>
-              <span className="ml-auto text-xs font-medium text-foreground">
-                {counts[status]}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      </Card>
 
       <motion.p
         initial={{ opacity: 0, y: 6 }}
@@ -164,12 +154,11 @@ export function PlanPanel({
                 <li
                   key={item.id}
                   className={cn(
-                    'rounded-lg border-l-2 bg-background px-3 py-2',
+                    'rounded-lg border border-l-2 border-border px-3 py-2 transition-shadow duration-200 hover:shadow-card',
                   )}
                   style={{
                     borderLeftColor: PLAN_STATUS_META[item.status].color,
-                    boxShadow: `-6px 0 18px -12px ${PLAN_STATUS_META[item.status].color}`,
-                    transition: 'box-shadow 200ms ease',
+                    backgroundColor: hues[STATUS_HUE[item.status]].tint,
                   }}
                 >
                   <div className="flex items-start gap-2">

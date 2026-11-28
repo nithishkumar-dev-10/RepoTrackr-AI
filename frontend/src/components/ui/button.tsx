@@ -57,5 +57,7 @@ function Button({
   )
 }
 
-export { Button, buttonVariants }
+// Only the component is exported so React Fast Refresh can preserve state.
+// `buttonVariants` is internal; `ButtonProps` covers callers that need variants.
+export { Button }
 export type { ButtonProps }

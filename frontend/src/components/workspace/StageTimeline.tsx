@@ -1,52 +1,82 @@
 import { motion } from 'framer-motion'
-import { Check, Loader2 } from 'lucide-react'
+import { Check, Loader2, RotateCcw, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 
-import { Badge } from '@/components/ui/badge'
+import { STATUS_COLOR } from '@/lib/designTokens'
+import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
-import { INDEX_STAGES } from '@/types'
-import type { IndexStatus } from '@/types'
+import { INDEX_RUN_STAGES } from '@/types'
+import type { IndexRunStatus } from '@/types'
 
 const STAGE_LABEL: Record<string, string> = {
-  clone: 'Clone',
-  parse: 'Parse',
-  graph: 'Graph',
-  index: 'Index',
-  done: 'Done',
-  error: 'Error',
+  queued: 'Queued',
+  cloning: 'Clone',
+  indexing: 'Index',
+  ready: 'Ready',
+  failed: 'Failed',
 }
+
+const GREEN_BAR = {
+  '--progress-a': '#047857',
+  '--progress-b': '#0F766E',
+  '--progress-c': '#34D399',
+  '--progress-glow': 'rgba(4,120,87,0.6)',
+} as CSSProperties
+
+const RED_BAR = {
+  '--progress-a': '#BE123C',
+  '--progress-b': '#DC2626',
+  '--progress-c': '#FB7185',
+  '--progress-glow': 'rgba(190,18,60,0.6)',
+} as CSSProperties
 
 export function StageTimeline({
   status,
-  demo,
+  onRetry,
+  retrying = false,
 }: {
-  status: IndexStatus | null
-  demo: boolean
+  status: IndexRunStatus | null
+  onRetry: () => void
+  retrying?: boolean
 }) {
-  const activeIndex = status
-    ? INDEX_STAGES.indexOf(status.stage as (typeof INDEX_STAGES)[number])
-    : -1
-  const progress = status?.progress ?? 0
-  const complete = status?.stage === 'done'
+  const stage = status?.status ?? 'added'
+  const activeIndex = INDEX_RUN_STAGES.indexOf(
+    stage as (typeof INDEX_RUN_STAGES)[number],
+  )
+  const complete = stage === 'ready'
+  const failed = stage === 'failed'
+  // A failure is reported on the last real work stage, not on `ready`.
+  const failedIndex = failed ? INDEX_RUN_STAGES.length - 2 : -1
+  const progress = complete
+    ? 100
+    : failed || activeIndex < 0
+      ? 0
+      : (activeIndex / (INDEX_RUN_STAGES.length - 1)) * 100
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-xl border border-border bg-surface p-4 shadow-card">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-foreground">Indexing pipeline</p>
-        <div className="flex items-center gap-2">
-          {demo ? (
-            <Badge variant="outline" className="font-mono">
-              Demo data
-            </Badge>
-          ) : null}
-          <span className="font-mono text-xs text-muted-foreground">
-            {Math.round(progress)}%
-          </span>
-        </div>
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 font-mono text-xs',
+            failed
+              ? 'bg-rose-tint text-rose'
+              : complete
+                ? 'bg-emerald-tint text-emerald'
+                : 'text-muted-foreground',
+          )}
+        >
+          {status ? stage : 'added'}
+        </span>
       </div>
 
-      <Progress value={progress} className="mt-3" />
+      <Progress
+        value={failed ? 100 : progress}
+        className="mt-3"
+        style={failed ? RED_BAR : GREEN_BAR}
+      />
 
       <div className="relative mt-4">
         <div
@@ -57,51 +87,65 @@ export function StageTimeline({
           aria-hidden="true"
           className="progress-glow absolute left-1 top-3.5 hidden h-0.5 rounded-full sm:block"
           style={{
-            width: `calc((100% - 0.5rem) * ${complete ? 1 : activeIndex > 0 ? activeIndex / INDEX_STAGES.length : 0})`,
-            transition: 'width 400ms ease',
+            ...(failed ? RED_BAR : GREEN_BAR),
+            width: `calc((100% - 0.5rem) * ${failed ? 1 : progress / 100})`,
+            transition: 'width 200ms ease',
           }}
         />
         <ol className="relative grid grid-cols-4 gap-2">
-          {INDEX_STAGES.map((stage, i) => {
+          {INDEX_RUN_STAGES.map((item, i) => {
             const done = complete || (activeIndex >= 0 && i < activeIndex)
-            const active = !complete && i === activeIndex
+            const active = !complete && !failed && i === activeIndex
+            const isFailed = failed && i === failedIndex
             return (
               <li
-                key={stage}
+                key={item}
                 className="flex flex-col items-center gap-1.5 text-center"
               >
-                <span
+                <motion.span
+                  key={`${item}-${isFailed ? 'failed' : active ? 'active' : 'idle'}`}
+                  initial={{ scale: 0.85, opacity: 0.6 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.2 }}
                   className={cn(
-                    'grid size-7 place-items-center rounded-full border text-xs transition-shadow duration-200',
+                    'grid size-7 place-items-center rounded-full border text-xs transition-colors duration-200',
                     done &&
-                      'border-status-done/30 bg-status-done/15 text-status-done glow-sm',
+                      'border-emerald/30 bg-emerald-tint text-emerald glow-sm',
                     active &&
-                      'pulse-dot border-brand/40 bg-accent text-brand glow-sm',
-                    !done &&
-                      !active &&
+                      'pulse-dot border-emerald/40 bg-emerald-tint text-emerald',
+                    isFailed && 'border-rose/40 bg-rose-tint text-rose glow-sm',
+                    !done && !active && !isFailed &&
                       'border-border bg-surface text-muted-foreground',
                   )}
                   style={
                     active
-                      ? ({ '--glow-soft': 'rgba(59,91,255,0.55)' } as CSSProperties)
-                      : undefined
+                      ? ({ '--glow-soft': 'rgba(4,120,87,0.45)' } as CSSProperties)
+                      : isFailed
+                        ? ({ '--glow-soft': 'rgba(190,18,60,0.4)' } as CSSProperties)
+                        : undefined
                   }
                 >
-                  {done ? (
+                  {isFailed ? (
+                    <X className="size-3.5" />
+                  ) : done ? (
                     <Check className="size-3.5" />
                   ) : active ? (
                     <Loader2 className="size-3.5 animate-spin" />
                   ) : (
                     <span className="font-mono">{i + 1}</span>
                   )}
-                </span>
+                </motion.span>
                 <span
                   className={cn(
                     'text-xs',
-                    active ? 'font-medium text-foreground' : 'text-muted-foreground',
+                    isFailed
+                      ? 'font-medium text-rose'
+                      : active
+                        ? 'font-medium text-emerald'
+                        : 'text-muted-foreground',
                   )}
                 >
-                  {STAGE_LABEL[stage]}
+                  {STAGE_LABEL[item]}
                 </span>
               </li>
             )
@@ -109,14 +153,33 @@ export function StageTimeline({
         </ol>
       </div>
 
-      {status?.stage === 'error' ? (
-        <motion.p
+      {failed ? (
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="mt-3 text-xs text-destructive"
+          transition={{ duration: 0.2 }}
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose/30 bg-rose-tint p-3"
         >
-          Indexing failed.
-        </motion.p>
+          <p
+            className="max-w-full break-words text-xs"
+            style={{ color: STATUS_COLOR.missing }}
+          >
+            {status?.error_message || 'Indexing failed.'}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRetry}
+            disabled={retrying}
+          >
+            {retrying ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="size-3.5" />
+            )}
+            Retry
+          </Button>
+        </motion.div>
       ) : null}
     </div>
   )

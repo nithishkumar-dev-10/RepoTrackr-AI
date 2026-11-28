@@ -9,31 +9,36 @@ from fastapi import (
     Request,
     status,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
+from app.core.config import get_settings, verification_required
 from app.core.database import get_db
 from app.core.email import send_reset_email, send_verification_email
+from app.core.errors import EmailNotVerifiedError
 from app.core.ratelimit import limiter
 from app.features.auth.dependencies import get_current_user
 from app.models.email_token import EmailToken, EmailTokenType
+from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    LogoutRequest,
     RefreshRequest,
     ResendVerificationRequest,
     ResetPasswordRequest,
     SignupRequest,
+    SignupResponse,
     TokenResponse,
     UserOut,
     VerifyEmailRequest,
 )
 from app.schemas.common import MessageResponse
 from app.security import (
+    DUMMY_PASSWORD_HASH,
     TokenError,
     TokenType,
     create_access_token,
@@ -58,6 +63,10 @@ RESEND_MESSAGE = (
 FORGOT_MESSAGE = (
     "If an account exists for that email, a password reset link has been sent."
 )
+SIGNUP_DISABLED_MESSAGE = (
+    "Account created. Email verification is disabled; you can log in."
+)
+VERIFICATION_DISABLED_MESSAGE = "Email verification is disabled (dev/demo mode)."
 
 
 def _normalize_email(email: str) -> str:
@@ -77,10 +86,77 @@ def _create_email_token(db: Session, user: User, token_type: EmailTokenType) -> 
     return raw_token
 
 
-def _issue_tokens(user: User) -> TokenResponse:
-    return TokenResponse(
+def _store_refresh_token(db: Session, user_id: int, raw_token: str) -> None:
+    payload = decode_token(raw_token, TokenType.REFRESH)
+    token_hash = hash_token(raw_token)
+    expires_at = datetime.fromtimestamp(int(payload["exp"]), tz=timezone.utc)
+    db.add(
+        RefreshToken(
+            user_id=user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+        )
+    )
+
+
+def _active_refresh_token(
+    db: Session, user_id: int, raw_token: str
+) -> RefreshToken | None:
+    return db.scalar(
+        select(RefreshToken).where(
+            RefreshToken.token_hash == hash_token(raw_token),
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > datetime.now(timezone.utc),
+        )
+    )
+
+
+def _revoke_refresh_token(db: Session, raw_token: str) -> None:
+    db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.token_hash == hash_token(raw_token),
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
+    )
+
+
+def _consume_refresh_token(db: Session, user_id: int, raw_token: str) -> bool:
+    now = datetime.now(timezone.utc)
+    result = db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.token_hash == hash_token(raw_token),
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.expires_at > now,
+        )
+        .values(revoked_at=now)
+        .returning(RefreshToken.id)
+    )
+    return len(result.all()) == 1
+
+
+def _issue_tokens(db: Session, user: User) -> TokenResponse:
+    response = TokenResponse(
         access_token=create_access_token(user.id),
         refresh_token=create_refresh_token(user.id),
+    )
+    _store_refresh_token(db, user.id, response.refresh_token)
+    db.commit()
+    return response
+
+
+def _revoke_all_refresh_tokens(db: Session, user_id: int) -> None:
+    db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=datetime.now(timezone.utc))
     )
 
 
@@ -99,6 +175,26 @@ def _invalidate_active_tokens(
         token.used_at = now
 
 
+def _signup_message() -> MessageResponse:
+    return MessageResponse(
+        message="Account created. Check your email to verify your account."
+    )
+
+
+def _signup_disabled_message() -> SignupResponse:
+    return SignupResponse(
+        message=SIGNUP_DISABLED_MESSAGE,
+        verification_required=False,
+    )
+
+
+def _send_signup_email(db: Session, user: User, email: str) -> None:
+    _invalidate_active_tokens(db, user.id, EmailTokenType.VERIFY)
+    raw_token = _create_email_token(db, user, EmailTokenType.VERIFY)
+    db.commit()
+    _send_verification_safely(email, raw_token)
+
+
 def _send_verification_safely(email: str, raw_token: str) -> None:
     try:
         send_verification_email(email, raw_token)
@@ -114,20 +210,41 @@ def _send_reset_safely(email: str, raw_token: str) -> None:
 
 
 @router.post(
-    "/signup", response_model=MessageResponse, status_code=status.HTTP_201_CREATED
+    "/signup",
+    response_model=SignupResponse,
+    status_code=status.HTTP_201_CREATED,
+    response_model_exclude_none=True,
 )
 @limiter.limit(lambda: get_settings().RATE_LIMIT_SIGNUP)
 def signup(
     request: Request, payload: SignupRequest, db: Session = Depends(get_db)
-) -> MessageResponse:
+) -> SignupResponse:
     email = _normalize_email(payload.email)
+    password_hash = hash_password(payload.password)
+    existing = db.scalar(select(User).where(User.email == email))
 
-    if db.scalar(select(User).where(User.email == email)) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Email is already registered")
+    if not verification_required():
+        if existing is None:
+            db.add(
+                User(
+                    email=email,
+                    password_hash=password_hash,
+                    is_verified=True,
+                )
+            )
+            try:
+                db.commit()
+            except IntegrityError:
+                db.rollback()
+        return _signup_disabled_message()
+
+    if existing is not None:
+        _send_signup_email(db, existing, email)
+        return _signup_message()
 
     user = User(
         email=email,
-        password_hash=hash_password(payload.password),
+        password_hash=password_hash,
         is_verified=False,
     )
     db.add(user)
@@ -135,21 +252,29 @@ def signup(
         db.flush()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "Email is already registered")
+        existing = db.scalar(select(User).where(User.email == email))
+        if existing is not None:
+            _send_signup_email(db, existing, email)
+            return _signup_message()
+        raise
 
     raw_token = _create_email_token(db, user, EmailTokenType.VERIFY)
     db.commit()
 
     _send_verification_safely(email, raw_token)
-    return MessageResponse(
-        message="Account created. Check your email to verify your account."
-    )
+    return _signup_message()
 
 
 @router.post("/verify-email", response_model=MessageResponse)
+@limiter.limit(lambda: get_settings().RATE_LIMIT_VERIFY_EMAIL)
 def verify_email(
-    payload: VerifyEmailRequest, db: Session = Depends(get_db)
+    request: Request,
+    payload: VerifyEmailRequest,
+    db: Session = Depends(get_db),
 ) -> MessageResponse:
+    if not verification_required():
+        return MessageResponse(message=VERIFICATION_DISABLED_MESSAGE)
+
     token = db.scalar(
         select(EmailToken).where(
             EmailToken.token_hash == hash_token(payload.token),
@@ -175,14 +300,25 @@ def verify_email(
 def resend_verification(
     request: Request, payload: ResendVerificationRequest, db: Session = Depends(get_db)
 ) -> MessageResponse:
+    if not verification_required():
+        return MessageResponse(message=VERIFICATION_DISABLED_MESSAGE)
+
     email = _normalize_email(payload.email)
     user = db.scalar(select(User).where(User.email == email))
+    raw_token, token_hash = generate_email_token()
 
     if user is None or user.is_verified:
         return MessageResponse(message=RESEND_MESSAGE)
 
     _invalidate_active_tokens(db, user.id, EmailTokenType.VERIFY)
-    raw_token = _create_email_token(db, user, EmailTokenType.VERIFY)
+    db.add(
+        EmailToken(
+            user_id=user.id,
+            type=EmailTokenType.VERIFY,
+            token_hash=token_hash,
+            expires_at=expires_at(EmailTokenType.VERIFY),
+        )
+    )
     db.commit()
 
     _send_verification_safely(email, raw_token)
@@ -196,21 +332,27 @@ def login(
 ) -> TokenResponse:
     email = _normalize_email(payload.email)
     user = db.scalar(select(User).where(User.email == email))
+    password_hash = user.password_hash if user is not None else DUMMY_PASSWORD_HASH
+    password_matches = verify_password(payload.password, password_hash)
 
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if user is None or not password_matches:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+    if verification_required() and not user.is_verified:
+        # Same status and message as a bad login; only the code differs so the
+        # UI can point to verification without revealing the account to probes.
+        # With verification disabled the check is skipped entirely.
+        raise EmailNotVerifiedError()
 
-    if not user.is_verified:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            "Email not verified. Please verify your email before logging in.",
-        )
-
-    return _issue_tokens(user)
+    return _issue_tokens(db, user)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResponse:
+@limiter.limit(lambda: get_settings().RATE_LIMIT_REFRESH)
+def refresh(
+    request: Request,
+    payload: RefreshRequest,
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     try:
         token_payload = decode_token(payload.refresh_token, TokenType.REFRESH)
         user_id = int(token_payload["sub"])
@@ -220,16 +362,35 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResp
         )
 
     user = db.get(User, user_id)
-    if user is None or not user.is_verified:
+    if user is None or (verification_required() and not user.is_verified):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token"
         )
 
-    return _issue_tokens(user)
+    if not _consume_refresh_token(db, user_id, payload.refresh_token):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, "Invalid or expired refresh token"
+        )
+
+    return _issue_tokens(db, user)
 
 
 @router.post("/logout", response_model=MessageResponse)
-def logout(current_user: User = Depends(get_current_user)) -> MessageResponse:
+@limiter.limit(lambda: get_settings().RATE_LIMIT_LOGOUT)
+def logout(
+    request: Request,
+    payload: LogoutRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    if payload is not None and payload.refresh_token:
+        stored = _active_refresh_token(
+            db, current_user.id, payload.refresh_token
+        )
+        if stored is not None:
+            _revoke_refresh_token(db, payload.refresh_token)
+            db.commit()
+
     return MessageResponse(message="Logged out.")
 
 
@@ -243,10 +404,18 @@ def forgot_password(
 ) -> MessageResponse:
     email = _normalize_email(payload.email)
     user = db.scalar(select(User).where(User.email == email))
+    raw_token, token_hash = generate_email_token()
 
     if user is not None:
         _invalidate_active_tokens(db, user.id, EmailTokenType.RESET)
-        raw_token = _create_email_token(db, user, EmailTokenType.RESET)
+        db.add(
+            EmailToken(
+                user_id=user.id,
+                type=EmailTokenType.RESET,
+                token_hash=token_hash,
+                expires_at=expires_at(EmailTokenType.RESET),
+            )
+        )
         db.commit()
         background_tasks.add_task(_send_reset_safely, email, raw_token)
 
@@ -254,35 +423,52 @@ def forgot_password(
 
 
 @router.post("/reset-password", response_model=MessageResponse)
+@limiter.limit(lambda: get_settings().RATE_LIMIT_RESET_PASSWORD)
 def reset_password(
-    payload: ResetPasswordRequest, db: Session = Depends(get_db)
+    request: Request,
+    payload: ResetPasswordRequest,
+    db: Session = Depends(get_db),
 ) -> MessageResponse:
-    token = db.scalar(
-        select(EmailToken).where(
-            EmailToken.token_hash == hash_token(payload.token),
+    token_hash = hash_token(payload.token)
+    now = datetime.now(timezone.utc)
+    result = db.execute(
+        update(EmailToken)
+        .where(
+            EmailToken.token_hash == token_hash,
             EmailToken.type == EmailTokenType.RESET,
+            EmailToken.used_at.is_(None),
+            EmailToken.expires_at > now,
         )
+        .values(used_at=now)
+        .returning(EmailToken.user_id)
     )
-    user = None if token is None else db.get(User, token.user_id)
-    if (
-        token is None
-        or user is None
-        or is_used(token.used_at)
-        or is_expired(token.expires_at)
-    ):
+    consumed = result.all()
+    if len(consumed) != 1:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
+        )
+
+    user_id = consumed[0][0]
+    user = db.get(User, user_id)
+    if user is None:
+        db.rollback()
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, "Invalid or expired reset token"
         )
 
     user.password_hash = hash_password(payload.new_password)
-    token.used_at = datetime.now(timezone.utc)
+    _revoke_all_refresh_tokens(db, user_id)
+    _invalidate_active_tokens(db, user_id, EmailTokenType.RESET)
     db.commit()
 
     return MessageResponse(message="Password has been reset. You can now log in.")
 
 
 @router.post("/change-password", response_model=MessageResponse)
+@limiter.limit(lambda: get_settings().RATE_LIMIT_CHANGE_PASSWORD)
 def change_password(
+    request: Request,
     payload: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -298,6 +484,8 @@ def change_password(
         )
 
     current_user.password_hash = hash_password(payload.new_password)
+    _revoke_all_refresh_tokens(db, current_user.id)
+    _invalidate_active_tokens(db, current_user.id, EmailTokenType.RESET)
     db.commit()
 
     return MessageResponse(message="Password changed.")
@@ -308,6 +496,7 @@ def delete_account(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MessageResponse:
+    _revoke_all_refresh_tokens(db, current_user.id)
     db.delete(current_user)
     db.commit()
 

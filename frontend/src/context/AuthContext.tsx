@@ -9,8 +9,13 @@ import {
 import type { ReactNode } from 'react'
 
 import * as authApi from '@/api/auth'
-import { clearTokens, getAccessToken, setTokens } from '@/lib/tokenStorage'
-import type { User } from '@/types'
+import {
+  AUTH_INVALIDATED_EVENT,
+  clearTokens,
+  getAccessToken,
+  setTokens,
+} from '@/lib/tokenStorage'
+import type { SignupResponse, User } from '@/types'
 
 export type AuthStatus = 'loading' | 'authenticated' | 'anonymous'
 
@@ -18,8 +23,8 @@ interface AuthContextValue {
   user: User | null
   status: AuthStatus
   login: (email: string, password: string) => Promise<void>
-  /** Returns the backend message; never logs the user in. */
-  signup: (email: string, password: string) => Promise<string>
+  /** Returns the backend message and verification flag; never logs the user in. */
+  signup: (email: string, password: string) => Promise<SignupResponse>
   logout: () => Promise<void>
   /** Re-read the session from GET /auth/me. */
   refresh: () => Promise<void>
@@ -31,12 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [status, setStatus] = useState<AuthStatus>('loading')
 
-  const refresh = useCallback(async () => {
-    if (!getAccessToken()) {
-      setUser(null)
-      setStatus('anonymous')
-      return
-    }
+  const loadUser = useCallback(async () => {
     try {
       const me = await authApi.me()
       setUser(me)
@@ -48,9 +48,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refresh = useCallback(async () => {
+    if (!getAccessToken()) {
+      setUser(null)
+      setStatus('anonymous')
+      return
+    }
+    await loadUser()
+  }, [loadUser])
+
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    let cancelled = false
+    ;(async () => {
+      if (!getAccessToken()) {
+        if (!cancelled) {
+          setUser(null)
+          setStatus('anonymous')
+        }
+        return
+      }
+      try {
+        const me = await authApi.me()
+        if (!cancelled) {
+          setUser(me)
+          setStatus('authenticated')
+        }
+      } catch {
+        if (!cancelled) {
+          clearTokens()
+          setUser(null)
+          setStatus('anonymous')
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleInvalidation = () => {
+      clearTokens()
+      setUser(null)
+      setStatus('anonymous')
+    }
+    window.addEventListener(AUTH_INVALIDATED_EVENT, handleInvalidation)
+    return () => window.removeEventListener(AUTH_INVALIDATED_EVENT, handleInvalidation)
+  }, [])
 
   const login = useCallback(async (email: string, password: string) => {
     const tokens = await authApi.login({ email, password })
@@ -64,15 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signup = useCallback(async (email: string, password: string) => {
-    const res = await authApi.signup({ email, password })
-    return res.message
+    return authApi.signup({ email, password })
   }, [])
 
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
     } catch {
-      // The endpoint is a no-op; clearing local tokens is what matters.
+      // The server may be unreachable; clearing local tokens still ends the session.
     }
     clearTokens()
     setUser(null)

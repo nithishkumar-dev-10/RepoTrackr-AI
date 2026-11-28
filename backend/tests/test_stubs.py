@@ -27,9 +27,6 @@ _PLAN_UPLOAD = {
 
 # (method, path template, extra request kwargs)
 _STUB_CASES = [
-    ("post", "/repos/{repo_id}/index", {}),
-    ("get", "/repos/{repo_id}/index/status", {}),
-    ("get", "/repos/{repo_id}/index/summary", {}),
     ("post", "/repos/{repo_id}/plan", _PLAN_UPLOAD),
     ("get", "/repos/{repo_id}/plan", {}),
     ("get", "/repos/{repo_id}/reader", {}),

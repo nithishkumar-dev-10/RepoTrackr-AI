@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   MailCheck,
+  Settings,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -65,7 +66,7 @@ export function Navbar() {
       <span
         aria-hidden="true"
         className={cn(
-          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-[opacity,box-shadow] duration-300',
+          'pointer-events-none absolute inset-x-0 -bottom-px h-px transition-[opacity,box-shadow] duration-200',
           scrolled ? 'opacity-100' : 'opacity-0',
         )}
         style={{
@@ -164,6 +165,18 @@ export function Navbar() {
                     {user?.is_verified ? 'Verified' : 'Unverified'}
                   </span>
                 </div>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    navigate('/settings')
+                  }}
+                  className="flex w-full items-center gap-2 px-4 py-3 text-sm text-foreground transition-colors hover:bg-accent"
+                >
+                  <Settings className="size-4 text-muted-foreground" />
+                  Account settings
+                </button>
                 <button
                   type="button"
                   role="menuitem"

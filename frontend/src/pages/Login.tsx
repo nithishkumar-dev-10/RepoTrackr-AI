@@ -74,7 +74,7 @@ export default function Login() {
       footer={
         <>
           New to RepoTrackr?{' '}
-          <Link to="/signup" className="font-medium text-brand hover:underline">
+          <Link to="/signup" className="rounded-sm font-medium text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             Create an account
           </Link>
         </>
@@ -161,8 +161,11 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          Can’t log in?{' '}
-          <Link to="/verify-email" className="text-brand hover:underline">
+          <Link to="/forgot-password" className="rounded-sm text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+            Forgot your password?
+          </Link>
+          {' · '}
+          <Link to="/verify-email" className="rounded-sm text-brand underline-offset-4 transition-colors duration-150 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
             Verify your email
           </Link>
         </p>

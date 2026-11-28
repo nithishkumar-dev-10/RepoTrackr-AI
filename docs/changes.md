@@ -4,6 +4,248 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Backend test isolation from local .env
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** no files created; modified `backend/tests/conftest.py`, `backend/tests/test_verification_flag.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the test suite now sets its entire environment before importing app settings or app modules, including verification mode, deployment mode, a temporary SQLite database, test-only secrets, SMTP/email values and high rate limits. It also points Pydantic Settings at a deliberately missing env file, so a developer's local `.env` cannot influence any test. Tests that need verification off now opt out explicitly in their own fixture. No application code, API contract or response shape was changed.
+- **New commands / env variables / endpoints / migrations:** none. Test-only settings are set inside `backend/tests/conftest.py`.
+- **Verification:** `python -m pytest -q` run three times — local `.env` with verification disabled, local `.env` with verification enabled, and no `.env` present — each produced **307 passed**. The original `.env` was restored byte-for-byte after the checks.
+- **Known issues / TODOs:** none from this change.
+
+---
+
+## UI polish Task 5: responsive verification and token docs
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** no files created; modified `frontend/src/pages/RepoWorkspace.tsx`, `frontend/src/components/workspace/GraphView.tsx`, `frontend/src/components/workspace/ModeTabs.tsx`, `frontend/README.md`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** reviewed the three target widths from the CSS/layout source. At 1440px the graph fills the remaining width beside the 440px side panel; at 1024px the same `lg` split stays usable because the panel is fixed while the graph flexes. The workspace no longer locks to viewport height below `lg`: the graph keeps a 50svh/300px-minimum canvas and the side panel scrolls beneath it. Graph toolbars wrap and the workspace mode tabs scroll instead of clipping at 390px. Graph toggles now expose their labels to screen readers. `frontend/README.md` gained a short UI design tokens note pointing to the CSS token source, its TypeScript mirror, card accents and glow variables. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory). Full backend suite: 307 passed with the verification-enabled environment; a local dev override that disables verification makes 83 legacy auth/repo tests fail, so the verification-enabled run is the recorded count. No browser runner is configured, so hover/focus and pixel-level 1440/1024/390 checks still need a real browser.
+- **Known issues / TODOs:** no automated frontend visual assertions or responsive screenshot runner; the CSS token map and `designTokens.ts` still need to be edited together.
+
+---
+
+## UI polish Task 4: dashboard cards and landing/auth polish
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** no files created; modified `frontend/src/components/dashboard/MiniGraphThumb.tsx`, `RepoCard.tsx`, `frontend/src/pages/Dashboard.tsx`, `Landing.tsx`, `Login.tsx`, `Signup.tsx`, `frontend/src/components/auth/AuthSplitLayout.tsx`, `FloatingInput.tsx`, `frontend/src/components/landing/FeatureCards.tsx`, `frontend/src/components/shared/GlowCard.tsx`, `frontend/src/components/Navbar.tsx`, `frontend/src/components/GlowRipple.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** repo cards now use tinted status chips matching the shared status tokens, and the mini graph thumbnail is readable (solid dark backdrop, brighter edges, palette-colored nodes, no blur halos). The dashboard empty state is a tinted card with feature chips around the existing CTA. Landing uses token-based gradient text/stat dots, and login/signup plus the auth split panel use the shared palette with visible focus rings and hover states. Hover/CSS transitions were normalized to 150–200ms; the global `prefers-reduced-motion` rule and `MotionConfig reducedMotion="user"` already disable movement. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory).
+- **Known issues / TODOs:** responsive widths (1440/1024/390px) and real-browser hover/focus behavior are still to be checked in Task 5.
+
+---
+
+## UI polish Task 3: polished Overview, timeline and mode panels
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `frontend/src/components/ui/StatusDonut.tsx`; modified `frontend/src/styles/glow.css`, `frontend/src/components/workspace/OverviewPanel.tsx`, `StageTimeline.tsx`, `ReaderPanel.tsx`, `PlanPanel.tsx`, `ContextPanel.tsx`, `frontend/src/components/CitationChip.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Overview now leads with six accented stat cards (symbols, files, modules, entry points, lines of code, graph edges) built from summary fields that were previously unused in the UI, with type-tinted symbol badges and tinted modules/entry-point cards while keeping every existing section. The indexing stepper shows a green animated current step, green completed steps and a red failed step with a red progress bar and error banner. Reader/Plan/Context keep all content and the "Not implemented yet" badge, but use accented cards, a new shared `StatusDonut`, an amber token-budget card with a teal→emerald bar and consistent `file:line` evidence chips. The progress glow now accepts `--progress-a/b/c/glow` custom properties so one effect serves every semantic bar. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory).
+- **Known issues / TODOs:** Reader/Plan/Context remain demo-backed and are still labelled "Not implemented yet"; no browser runner is configured for visual assertions.
+
+---
+
+## UI polish Task 2: centralized design tokens and accent cards
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `frontend/src/lib/designTokens.ts`; modified `frontend/src/index.css`, `frontend/src/lib/graphVisuals.ts`, `frontend/src/lib/planStatus.ts`, `frontend/src/components/ui/card.tsx`, `frontend/src/components/workspace/NodeInspector.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the palette now lives in one place: `index.css` declares surfaces, brand indigo/blue, teal/violet/amber/rose/emerald accents with matching tint surfaces, AA-safe status colors and card elevation, and maps them into Tailwind utilities via `@theme inline`; `designTokens.ts` mirrors the values for SVG/WebGL and derives status and node-type hues from the same families. Statuses, plan rings and graph node types now share the emerald/amber/rose/slate hue families. `Card` gained an `accent` prop (colored top border) and a new `AccentIcon` tinted icon well; both use the shared radius/shadow and a 200ms transition. Status/ink text colors were darkened to meet WCAG AA (≥4.5:1) on the light shell, and the node detail chip now uses the AA ink color instead of the bright canvas fill. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none. New Tailwind utility classes: `bg-teal`, `bg-teal-tint`, `text-violet`, `shadow-card`, etc., from the token map.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory). Contrast of every ink color on `#ffffff` and `#f6f7fb` was checked numerically (all ≥4.5:1). No new dependency was added.
+- **Known issues / TODOs:** the CSS tokens and `designTokens.ts` are a documented mirror pair (CSS cannot import TypeScript); both must be edited together. No browser-based contrast/visual assertion runner is configured.
+
+---
+
+## UI polish Task 1: readable, centered code graph
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `frontend/src/lib/graphVisuals.ts`; modified `frontend/src/lib/graphLayout.ts`, `frontend/src/components/workspace/GraphView.tsx`, `Graph2D.tsx`, `Graph3D.tsx`, `NodeInspector.tsx`, `frontend/src/pages/RepoWorkspace.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the API assigns every file in a repo like `cafe-management` to one top-level cluster (`backend`); the old layout put that single cluster on a ring at x=24 and kept only module nodes, so the graph was off-center and dense, and the 3D additive halos plus bloom made it look like one filled blob. `layoutGraph` now groups by immediate parent folder (falling back to per-file when there is only one folder), includes module and symbol nodes, runs a bounded deterministic force simulation with repulsion/collision, centers the result, and emits faint 8%-fill convex hulls. `Graph2D` is now the default: fit-to-view `preserveAspectRatio`, wheel zoom, drag pan, Reset view, a search box, a type legend, hover/selected neighbor emphasis, a node-count/capped notice and labels only on hover/selection. `Graph3D` uses centered camera bounds, type-colored nodes, no opaque halos or bloom, and pan/zoom; the List view and all loading/error/empty states are unchanged. `NodeInspector` gained symbol-type, callers and callees. No backend, API or response-shape code was touched.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` clean; `npm run lint` → 0 warnings / 0 errors; `npm run build` succeeds (only the pre-existing large-chunk advisory). No new dependency was added.
+- **Known issues / TODOs:** no browser runner is configured, so visual centering, hover and WebGL behavior were verified by code review and the build, not an automated browser assertion. Method/route/test hues are derived from the stored index summary or file paths because the graph wire shape only carries `class`/`function`/`module`.
+
+---
+
+## Verification flag: dev/demo email-verification bypass
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/tests/test_verification_flag.py`; modified `backend/app/core/config.py`, `backend/.env.example`, `backend/app/schemas/auth.py`, `backend/app/features/auth/router.py`, `backend/app/features/auth/dependencies.py`, `backend/app/main.py`, `frontend/src/types/auth.ts`, `frontend/src/api/auth.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/pages/Signup.tsx`, `frontend/src/lib/endpoints.ts`, `README.md`, `docs/api_contract.md`, `docs/mock_responses.md`, `docs/openapi.json`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** `REQUIRE_EMAIL_VERIFICATION` defaults to `true`, so all existing verification code, endpoints, pages and tests keep their current behavior. With the flag false, signup creates a verified user without creating an email token or sending mail and returns `verification_required: false`; the frontend reads that field and navigates to login instead of showing "Check your email". Login skips `email_not_verified`, refresh/`get_current_user` accept legacy unverified users in dev mode, and verify-email/resend still return 200 with a "verification is disabled" message. Startup logs `Email verification is DISABLED (dev/demo mode)` once and raises a clear `RuntimeError` for `APP_ENV=production`/`ENV=prod`. `APP_ENV` was added to settings so the production guard reads a typed value.
+- **New commands / env variables / endpoints / migrations:** `REQUIRE_EMAIL_VERIFICATION` (default `true`) and `APP_ENV` (default `dev`) in `backend/.env`/`.env.example`. Dev-mode lines: `APP_ENV=dev`, `ENV=dev`, `REQUIRE_EMAIL_VERIFICATION=false`. No endpoints or migrations added; signup's optional response field is omitted when verification is required.
+- **Verification:** focused `tests/test_verification_flag.py` → 6 passed; full backend `python -m pytest -q` → **307 passed, 10 warnings in 7.78s**; fresh-venv `requirements-dev.txt` suite → 307 passed; `cd frontend && npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeds with only the large-chunk advisory. `docs/openapi.json` was regenerated from the live app and now declares `SignupResponse`.
+- **Known issues / TODOs:** no browser test runner is configured, so the signup redirect was verified by typecheck/lint/build and code review, not an automated browser assertion. No secrets or `.env` values were committed or printed.
+
+---
+
+## Audit closeout - Task 7: full verification and real Part 2 E2E
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `docs/project_summary.md` and `docs/changes.md`; no repository files created or deleted. The E2E driver lived in the approved OS temp folder, not in the repo.
+- **What changed and why:** `docs/project_summary.md` now matches the verified current state: it documents the live `/graph` route, the redacted/dev-safe email fallback, correct per-file test counts, the fact that `safe_clone` is invoked by the HTTP background task, a Current verification section, and updated "Where You Can Help" notes (only Part 3–4 routers remain stubs; 301 tests exist). Stale claims about tokenized links in logs, 265/271 tests and missing HTTP wiring were removed.
+- **New commands / env variables / endpoints / migrations:** none added. Verification used the existing commands plus a temporary E2E driver with `DATABASE_URL`, `CLONE_ROOT`, `SMTP_HOST=""` and `PYTHONPATH` set only for that process; the temp DB was migrated from zero to `c4d8e7a1b2f3` with Alembic.
+- **Verification:** backend venv `python -m pytest -q` → **301 passed, 10 warnings in 7.35s**; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`. Frontend `npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeded (large-chunk advisory only). Real API E2E against `https://github.com/keleshev/schema` on a fresh temp DB: pre-ready `/index/summary` and `/graph` returned 409, `POST /index` returned 202, status ended `ready`; summary reported 20 file-tree entries, 4 files indexed/cached, 216 symbols, 3,335 LOC, 220 graph nodes, 266 graph edges, 4 centrality rows, `index_seconds` 1.953 and `seconds_per_10k_loc` 5.856; `/graph` returned 220 nodes, 266 edges, 2 clusters, `truncated: false`. No code from the cloned repository was executed; the indexer parses source with `ast`.
+- **Known issues / TODOs:** browser UI confirmation is **SKIPPED** because no browser/Playwright/Puppeteer runner is installed in this environment; the API path is fully verified. `backend/repotrackr.db.bak` remains untracked in the working tree and must never be committed. Vite's large-chunk advisory and the missing frontend test runner remain documented limitations.
+
+---
+
+## Audit closeout - Task 6: documentation accuracy and dev-dependency verification
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `docker/.gitkeep`; deleted the zero-byte `docker/docker-compose.yml`; modified `README.md`, `frontend/README.md`, `docs/mock_responses.md`, `docs/project_summary.md`, `docs/changes.md`; no other files changed.
+- **What changed and why:** the root README now describes Parts 1–2 as implemented, lists the live index/graph endpoints and 301 tests, documents the folder layout as it exists, and adds a Known limitations section (no AI/evals, CLI-only retrieval, single-process assumptions, graph caps, no Docker stack, no frontend test runner). `frontend/README.md` replaced the untouched Vite template with project-specific setup, env vars, commands, API boundary and state-handling notes. `docs/mock_responses.md` now shows the neutral 201 duplicate signup, the 401 `email_not_verified` login code, validation details without submitted `input`, live Part 2 index/summary/graph examples, and limits the 501 section to Part 3–4. The empty compose file was removed and replaced by `.gitkeep` so the approved `docker/` folder remains without a misleading placeholder.
+- **New commands / env variables / endpoints / migrations:** none. `requirements-dev.txt` was installed into a fresh temporary venv (outside the repo) and `python -m pytest -q` reported **301 passed, 10 warnings in 7.92s** there, confirming the pinned dev requirements are sufficient.
+- **Verification:** clean-venv install + pytest as above; `cd backend && .venv/bin/python -m pytest -q` still **301 passed**; `cd frontend && npm run typecheck && npm run lint && npm run build` clean (0 lint warnings).
+- **Known issues / TODOs:** `docker/` still has no real compose file or Dockerfile; Large Vite chunks and the absence of a frontend test runner remain documented limitations. No new docs claims are unverified.
+
+---
+
+## Audit closeout - Task 5: frontend states, clean lint, static-page note
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/RepoWorkspace.tsx`, `frontend/src/components/dashboard/MiniGraphThumb.tsx`, `frontend/src/components/workspace/PlanPanel.tsx`, `frontend/src/components/ui/button.tsx`, `frontend/src/components/ui/badge.tsx`, `README.md`, `docs/project_summary.md`, `docs/changes.md`; folded in the pre-existing Phase B frontend hardening edits to `frontend/src/api/client.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/lib/tokenStorage.ts`; no files created or deleted.
+- **What changed and why:** the Dashboard now has a single cancellation-guarded `load()` used by the first render, Refresh and Retry, with explicit skeleton, error/Retry and empty states; `RepoWorkspace` gained a Retry for the repository load alongside the existing graph/summary/status states. The four lint warnings are gone: `MiniGraphThumb` uses pure index-seeded values instead of mutating render state, `PlanPanel` uses prefix sums instead of a mutated cursor, and `button.tsx`/`badge.tsx` no longer export their `cva` variant helpers so React Fast Refresh can preserve component state (unused externally; prop types still exported). `README.md` states that loading/error/Retry/empty states are N/A on static pages (landing, Developer, account settings), which use toasts and inline form feedback. The earlier frontend auth hardening (401 refresh-retry with `rt:auth-invalidated` and token-generation guards, reflected in `AuthContext`/`client.ts`/`tokenStorage.ts`) was preserved here.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd frontend && npm run typecheck` passed; `npm run lint` → **0 warnings, 0 errors**; `npm run build` → succeeded (`✓ built in 649ms`, only the pre-existing large-chunk advisory). Backend tests were unchanged from Task 4 (301 passing).
+- **Known issues / TODOs:** no frontend test runner is configured, so state transitions are verified by typecheck/lint/build and review only. Vite still reports large chunks (elk/Graph3D) as an advisory.
+
+---
+
+## Audit closeout - Task 4: machine-readable unverified-login code + backend auth hardening
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/core/errors.py`; modified `backend/app/main.py`, `backend/app/features/auth/router.py`, `backend/tests/test_auth.py`, `docs/api_contract.md`, `docs/project_summary.md`, `docs/changes.md`, `frontend/src/api/auth.ts`, `frontend/src/lib/authErrors.ts`; folded in the pre-existing backend hardening edits to `backend/.env.example`, `backend/app/core/config.py`, `backend/app/core/email.py`, `backend/app/features/auth/dependencies.py`, `backend/app/security/{__init__,passwords,tokens}.py`, `backend/tests/conftest.py` and created `backend/tests/test_batch1_hardening.py`; no files deleted.
+- **What changed and why:** `GET /auth/login` still answers an unverified account with 401 and the same neutral `"Invalid email or password"` text as a bad login, but now raises `EmailNotVerifiedError`, a typed `ApiHTTPException` whose `code` is copied into the shared `{"error": {...}}` envelope by the global handler. Clients can therefore offer verification without account enumeration from the message. `describeAuthError()` keys off `error.code === 'email_not_verified'` (keeping the old 403 branch as a fallback), and the stale 403 comment in `auth.ts` was corrected. The earlier Phase B backend auth hardening (neutral responses, dummy hash, random refresh `jti` with single-use consumption, token invalidation, required `exp`, unverified-token rejection, stripped validation input, CORS `*` rejection, extra rate limits) was preserved and committed here so each audit task has one commit. `docs/api_contract.md` now documents the new code, the graph endpoint that Task 3 added, and the real error envelope instead of `{"detail": ...}` placeholders.
+- **New commands / env variables / endpoints / migrations:** error code `email_not_verified` on `POST /auth/login` only (HTTP 401 unchanged). No new endpoint, command or migration.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q` → **301 passed, 10 warnings in 7.65s** (including the updated unverified-login assertions and the 13 Phase B hardening tests); `cd frontend && npm run typecheck` passed; `npm run lint` reported only the same 4 known warnings (0 errors).
+- **Known issues / TODOs:** the code is emitted only when the password matches an unverified account; a probe with a wrong password stays indistinguishable by design. No frontend unit test runner exists, so the code-based branch is covered only by review/typecheck.
+
+---
+
+## Audit closeout - Task 3: real deterministic graph endpoint
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/features/indexing/graph_out.py`, `backend/tests/test_graph_endpoint.py` and `frontend/src/lib/env.ts`, `frontend/.env.example`; modified `backend/app/schemas/indexing.py`, `backend/app/features/indexing/router.py`, `backend/app/tasks/__init__.py`, `frontend/src/types/graph.ts`, `frontend/src/api/galaxy.ts`, `frontend/src/pages/RepoWorkspace.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** the indexing job now persists the full `build_graph()` output (nodes, edges, per-module centrality) in `index_summary`, because the clone folder is deleted after the job. A new `GET /repos/{repo_id}/graph` validates that stored summary and maps it to the frontend `Graph` contract in `graph_out.py`: module/class/function nodes get a cluster, normalized centrality, source line and `isEntry`, edges keep their typed `kind`, and clusters are derived from node paths. Responses are capped at 300 nodes and 1000 edges, with `truncated: true` and no dangling edges. The router prefix moved from `/repos/{repo_id}/index` to `/repos/{repo_id}` so `/graph` can live alongside `/index`, `/index/status` and `/index/summary` without changing those paths. On the client, `getGraph` calls the real endpoint by default; demo data is now opt-in via `VITE_USE_MOCKS=true` (typed through `src/lib/env.ts`, default `false`, documented in `frontend/.env.example`). `RepoWorkspace` fetches the graph separately from the repo so a 409 during indexing no longer blanks the page, and has explicit loading, error/Retry and empty states plus a capped-graph note.
+- **New commands / env variables / endpoints / migrations:** `GET /repos/{repo_id}/graph` (auth required, 404 for foreign/missing repo, 409 until `ready`, 200 `GraphOut`); frontend `VITE_USE_MOCKS` (default `false`) and `VITE_API_URL` template at `frontend/.env.example`. No migration or backend env variable changed.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q tests/test_graph_endpoint.py tests/test_indexing.py` → **15 passed**; full `cd backend && .venv/bin/python -m pytest -q` → **301 passed, 10 warnings in 7.32s**. `cd frontend && npm run typecheck` passed and `npm run lint` reported only the 4 known warnings (0 errors).
+- **Known issues / TODOs:** graph nodes are limited to the stored Python index; repos indexing to `failed` keep showing the empty graph state until reindexed. `VITE_USE_MOCKS` affects only the graph (Part 3–4 stubs keep their own fallback). Existing summaries written before this change have no `graph_nodes`, so the endpoint returns an empty graph until those repos are reindexed.
+
+---
+
+## Audit closeout - Task 2: line-preserving secret redaction
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** created `backend/app/pipeline/clone/redaction.py` and `backend/tests/pipeline/test_redaction.py`; modified `backend/app/pipeline/clone/__init__.py`, `backend/app/pipeline/chunking/builder.py`, `backend/app/tasks/__init__.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** added one reusable `redact_secrets(text) -> text` in the clone package that replaces credential-shaped values inside a line with `[REDACTED]` and emits exactly one output line per input line. It covers AWS/Google API keys, GitHub and Slack tokens, OpenAI-style keys, JWTs, PEM private-key blocks and string literals assigned to password/secret/token/api-key names, while leaving environment lookups, empty strings and documented placeholders untouched. Filename-based stripping was left as-is. The chunk builder now redacts every stored chunk (including cache hits, with token counts recomputed) and the background task redacts symbol docstrings and signatures before writing `index_summary`, so file:line citations remain correct and no stored source text carries a real key.
+- **New commands / env variables / endpoints / migrations:** none.
+- **Verification:** `cd backend && .venv/bin/python -m pytest -q tests/pipeline/test_redaction.py tests/pipeline/test_chunking.py tests/test_indexing.py` → **33 passed, 10 warnings**; full `cd backend && .venv/bin/python -m pytest -q` → **296 passed, 10 warnings in 7.04s**.
+- **Known issues / TODOs:** no inline-secret redaction runs on CLI output that is only printed, nor on exception text written to `error_message`; the function is ready for reuse before Part 3 model calls.
+
+---
+
+## Audit closeout - Task 1: bring local database to head
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `docs/changes.md`; created the gitignored backup `backend/repotackr.db.bak`; no tracked source files changed.
+- **What changed and why:** backed up the local SQLite database before upgrading it, then applied the two pending Alembic migrations so the development database matches the models.
+- **New commands / env variables / endpoints / migrations:** `cd backend && .venv/bin/python -m alembic upgrade head` (applied `09282e667a32 -> b7c1f2a9d4e6 -> c4d8e7a1b2f3`); `cd backend && .venv/bin/python -m alembic check`.
+- **Verification:** `alembic current` reported `c4d8e7a1b2f3 (head)`; `alembic check` reported `No new upgrade operations detected.`
+- **Known issues / TODOs:** the backup is deliberately untracked and must never be committed.
+
+---
+
+## Bug Hunt Phase B - Batch 1 (rows 1, 2, 6, 7, 8, 9, 10, 11, 12, 21, 22, 30)
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/tests/test_batch1_hardening.py`; modified `backend/.env.example`, `backend/app/core/config.py`, `backend/app/core/email.py`, `backend/app/features/auth/dependencies.py`, `backend/app/features/auth/router.py`, `backend/app/main.py`, `backend/app/security/__init__.py`, `backend/app/security/passwords.py`, `backend/app/security/tokens.py`, `backend/tests/conftest.py`, `backend/tests/test_auth.py`, `docs/api_contract.md`, `docs/project_summary.md`, `frontend/src/api/client.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/lib/tokenStorage.ts`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/RepoWorkspace.tsx`; no files deleted.
+- **What changed and why:** Signup/login/resend/forgot now return neutral responses for unknown or duplicate accounts, and login verifies unknown users against a dummy argon2 hash. Refresh JWTs carry a random `jti`; refresh consumes the stored row with one conditional update and revoked rows are never reactivated. Password reset and change-password invalidate all refresh tokens plus unused RESET tokens. `decode_token` requires `exp`; `get_current_user` rejects unverified users. Validation errors strip `input`/`ctx`; SMTP fallback logs omit tokenized bodies; CORS rejects `*` because credentials are enabled. Added rate limits to verify-email, refresh, reset-password, change-password and logout. The frontend no-token branch sets `anonymous`, `client.ts` emits `rt:auth-invalidated` on final auth failure, `AuthContext` clears tokens and pollers stop, and token writes are guarded by a generation counter. Docs now state that rate limiting and startup recovery assume a single process.
+- **New commands / env variables / endpoints / migrations:** new env vars `RATE_LIMIT_REFRESH`, `RATE_LIMIT_VERIFY_EMAIL`, `RATE_LIMIT_RESET_PASSWORD`, `RATE_LIMIT_CHANGE_PASSWORD`, `RATE_LIMIT_LOGOUT`; no new commands, endpoints or migrations. No schema change.
+- **Verification:** the 13 new hardening tests plus 3 updated existing tests failed before the fixes (16 failed) and passed after. Full backend `python -m pytest -q -p no:cacheprovider` → **284 passed, 10 warnings in 15.77s**. Frontend `npm run typecheck` passed, `npm run lint` → 4 warnings / 0 errors (same pre-existing four), `npm run build` → 5551 modules transformed, built in 1.42s. Row 22 reproduced before fixing: `CORS_ORIGINS=["*"]` returned `Access-Control-Allow-Origin: https://evil.example` with `Access-Control-Allow-Credentials: true`. Fresh-profile CDP on a new Vite/backend pair showed `/login`, `/signup` and `/forgot-password` rendered with 0 localStorage keys and no spinner, and `/dashboard` redirected to `/login`; seeding invalid tokens produced 2 `rt:auth-invalidated` events, a `/login` redirect and 0 localStorage keys; a 1.5s delayed refresh that resolved after an invalidation event did not restore tokens. No commit or push was made.
+- **Known issues / TODOs:** rows 21 and 24 are documented single-process assumptions, not fixed. Row 35 and the remaining Batch 2–4 rows are untouched. The generation counter was verified in a browser with a mocked delayed refresh, not against a real backend race. `docs/postman_collection.json` still contains older signup/duplicate/login/unverified examples; `docs/openapi.json` was regenerated but unchanged because these status changes are not declared in FastAPI schemas. The four frontend lint warnings remain out of scope; no frontend unit runner exists.
+
+---
+
+## Closeout Phase 4 - refresh-token revocation and atomic reset consumption
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/alembic/versions/c4d8e7a1b2f3_add_refresh_tokens.py` and `backend/app/models/refresh_token.py`; modified `backend/app/features/auth/router.py`, `backend/app/models/__init__.py`, `backend/app/models/user.py`, `backend/app/schemas/auth.py`, `backend/tests/test_auth.py`, `frontend/src/api/auth.ts`, `frontend/src/context/AuthContext.tsx`, `docs/api_contract.md`, `docs/openapi.json`, `docs/postman_collection.json`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Added a dedicated `refresh_tokens` table storing only the SHA-256 hash of issued refresh JWTs plus `user_id`, `expires_at` and `revoked_at`. Login and refresh record that hash; refresh now requires a stored, unrevoked, unexpired hash, revokes it, and reissues a pair (an identical same-second JWT reactivates the same row rather than creating a duplicate). Logout accepts an optional `refresh_token` body and revokes that token server-side; password change and account deletion revoke all of the user's active refresh tokens. Reset-password consumption was tightened from a preliminary select plus update to one conditional `UPDATE ... WHERE used_at IS NULL AND expires_at > now ... RETURNING user_id` with a consumed-row check, so a second use cannot succeed. The frontend logout wrapper sends the stored refresh token, and the API contract, OpenAPI, Postman and project summary were updated to match the code.
+- **New commands / env variables / endpoints / migrations:** new Alembic revision `c4d8e7a1b2f3` (`down_revision = b7c1f2a9d4e6`) creates `refresh_tokens`. `POST /auth/logout` now accepts an optional `LogoutRequest` body (`{"refresh_token": "..."}`); no new endpoints, packages or env variables. `POST /auth/refresh` behaviour changed from stateless to stored-hash validation.
+- **Verification:** focused `tests/test_auth.py` → 42 passed, 5 warnings in 3.69s. Full backend `python -m pytest -q -p no:cacheprovider` → **271 passed, 5 warnings in 15.34s**. `alembic upgrade head && alembic check` on a temporary SQLite DB reached `c4d8e7a1b2f3` and reported "No new upgrade operations detected." Frontend `npm run typecheck` passed; `npm run lint` passed with 4 warnings and 0 errors (all pre-existing); `npm run build` passed with 5551 modules in 1.15s. `docs/openapi.json` and `docs/postman_collection.json` parse as JSON. No commit or push was made.
+- **Known issues / TODOs:** Refresh is keep/reissue rather than guaranteed distinct rotation because JWT `iat`/`exp` have second resolution; the identical token reactivates its stored hash. The logout flow was not exercised in a browser this phase; it was verified through endpoint tests and the frontend wrapper. The four pre-existing lint warnings remain out of scope, there is no frontend test script, and 3D/WebGL rendering was not verified. Part 3–4 routes, Docker, evals and the AI layer are untouched.
+
+---
+
+## Closeout Phase 3 - hook warnings, cache-hit log, Dashboard 409
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** modified `frontend/src/context/AuthContext.tsx`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/components/workspace/Graph3D.tsx`, `frontend/src/pages/RepoWorkspace.tsx`, `backend/tests/test_indexing.py`, `docs/project_summary.md`, `docs/changes.md`; no files created or deleted.
+- **What changed and why:** Removed the nine targeted React hook warnings without eslint-disable comments. `AuthContext` and `Dashboard` load data directly inside cancellable mount effects; `Graph3D` reads reduced-motion through `useSyncExternalStore`; `RepoWorkspace` is keyed by the route id so its per-repo state resets without set-state-in-effect, derives `effectiveStatus`/`currentRepo` during render, and starts tab queries from the tab click instead of an effect. The cache regression test now asserts the real INFO log (`Index cache hit for repo … <sha>`) instead of relying only on elapsed time. The Dashboard Start button was exercised in a browser while the backend repo was made `cloning`, confirming the 409 toast instead of only checking the raw HTTP response.
+- **New commands / env variables / endpoints / migrations:** none. No token, endpoint or schema change was made in this phase.
+- **Verification:** `python -m pytest -q -p no:cacheprovider` → 266 passed, 5 warnings in 14.13s; the focused `tests/test_indexing.py` run → 10 passed, 5 warnings in 2.19s with the new caplog assertion. `npm run typecheck` passed, `npm run lint` passed with 4 warnings and 0 errors (all pre-existing: two `only-export-components`, two `immutability`; zero `set-state-in-effect`/`exhaustive-deps`), and `npm run build` passed with 5551 modules in 2.01s. Headless Chrome/CDP on repo 5 showed an enabled "Index" button, then after the backend state was changed to `cloning` and the button was clicked, showed "Already indexing / Indexing is already cloning for this repo."; captured `/index` responses were 200 then 409 and `Runtime.exceptionThrown` was empty.
+- **Known issues / TODOs:** the four remaining lint warnings are outside this closeout. The WebGL context failure in headless Chrome still falls back to the tested 2D graph; 3D rendering was not verified. There is still no frontend test script, so browser checks remain CDP-based. No commit or push was made.
+
+---
+
+## Closeout Phase 2 - API docs synced to live Part 2
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** modified `docs/api_contract.md`, `docs/openapi.json`, `docs/postman_collection.json`, `docs/project_summary.md`, `docs/changes.md`; no files created or deleted.
+- **What changed and why:** `docs/api_contract.md` no longer calls Part 2 a stub: it now documents `POST .../index` as 202 with the real `{"status":"queued","message":"Indexing queued."}` body and 409 while running, `GET .../status` as 200 with status/SHA/error, and `GET .../summary` as 200 with the full `IndexSummaryOut` shape plus 409/500 cases. `docs/openapi.json` was regenerated from the live app, replacing the three 501 responses with 202/200 and adding `IndexStartOut`, `IndexStatusOut`, `IndexSummaryOut`, `IndexSymbolOut` and the updated `RepoOut`. `docs/postman_collection.json` now has real 202/200 success examples for the same three requests; its seven remaining 501 examples are only the Part 3–4 stubs. `docs/project_summary.md` also had stale test-command counts corrected to the current 266-test suite.
+- **New commands / env variables / endpoints / migrations:** none. The documented endpoints did not change; only their response documentation changed.
+- **Verification:** `python -m pytest -q -p no:cacheprovider` → 266 passed, 5 warnings in 15.19s. `npm run typecheck`, `npm run lint` (13 warnings, 0 errors) and `npm run build` (5551 modules, built in 2.16s) passed. Both JSON docs parse successfully. No 501 remains for Part 2 in the contract, OpenAPI or Postman artifacts.
+- **Known issues / TODOs:** Part 3–4 routes are still documented as 501 stubs. Lint warnings are unchanged from Phase 1; Phase 3 will fix the `RepoWorkspace.tsx` and `Dashboard.tsx` ones properly.
+
+---
+
+## Closeout Phase 1 - tab crash fix
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `frontend/src/components/workspace/PanelErrorBoundary.tsx`; modified `frontend/src/pages/RepoWorkspace.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** `RepoWorkspace` stored the `{data, demo}` result returned by the mock query wrappers directly into `ModeResult`, which expects `{response, demo}`. Reading `results.reader.response.readingOrder` therefore crashed, and Plan/Context had the same mismatch. `runQuery` now unwraps `result.data` into `response` and keeps `result.demo`, so Reader/Plan/Context receive the shape they expect and still show "Not implemented yet". A `PanelErrorBoundary` keyed by the active tab now wraps `ModePanel` and renders an error message plus Retry instead of a blank page if a future tab throws.
+- **New commands / env variables / endpoints / migrations:** none. No mock files were deleted and no Part 3/4 logic was added.
+- **Verification:** backend `python -m pytest -q -p no:cacheprovider` → 266 passed, 5 warnings in 15.84s. Frontend `npm run typecheck` passed; `npm run lint` passed with 13 warnings, 0 errors; `npm run build` passed (5551 modules). Headless Chrome/CDP opened Overview → Reader → Plan → Context on ready repo 2 in order: every tab stayed selected, body content remained present, no error-boundary message appeared, Reader/Plan/Context each showed "Not implemented yet", and `Runtime.exceptionThrown` was empty.
+- **Known issues / TODOs:** no frontend test script exists, so tab behaviour was verified only through typecheck/build/lint and headless CDP. The pre-existing lint warnings outside this phase remain; Phase 3 will fix the new ones in `RepoWorkspace.tsx` and `Dashboard.tsx`.
+
+---
+
+## Step 2B - Part 2 workspace UI
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `frontend/src/components/workspace/OverviewPanel.tsx`; modified `frontend/src/api/galaxy.ts`, `frontend/src/api/repos.ts`, `frontend/src/types/pipeline.ts`, `frontend/src/types/repo.ts`, `frontend/src/pages/RepoWorkspace.tsx`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/components/dashboard/RepoCard.tsx`, `frontend/src/components/workspace/StageTimeline.tsx`, `frontend/src/components/workspace/ModeTabs.tsx`, `frontend/src/components/workspace/ModePanel.tsx`, `frontend/src/components/workspace/ReaderPanel.tsx`, `frontend/src/components/workspace/PlanPanel.tsx`, `frontend/src/components/workspace/ContextPanel.tsx`, `frontend/src/components/workspace/CommandBar.tsx`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Built the Part 2-only UI. `src/api/galaxy.ts` now calls the live index endpoints directly and has no mock fallback for Part 2; the mock fallback remains only for the `501` Part 3–4 routes. `OverviewPanel.tsx` renders the real stored summary only after the status is `ready`, with explicit loading, empty, error and not-ready states; it shows commit SHA, symbol counts, modules, entry points, file tree and each symbol's `file:line_start`–`line_end`. `RepoWorkspace.tsx` polls `/index/status` every 2.5s while active, clears the timer on terminal status or unmount, fetches `/index/summary` only at `ready`, starts indexing from repo detail, and handles a start `409` by showing "Already indexing" and refreshing status. `Dashboard.tsx` polls while any visible repo is active and handles `409`. `RepoCard.tsx` and the workspace show backend statuses (`queued`, `cloning`, `indexing`, `ready`, `failed`) rather than the old UI-only names. `StageTimeline.tsx` shows the real stages, `error_message` and Retry. The fake-evidence badges in Reader/Plan/Context were relabelled "Not implemented yet"; their logic was otherwise left alone.
+- **New commands / env variables / endpoints / migrations:** no new commands, packages, env variables or migrations. No endpoint changed; the frontend now consumes `POST /repos/{id}/index`, `GET .../index/status` and `GET .../index/summary`.
+- **Verification:** `cd frontend && npm run typecheck` passed; `npm run lint` passed with 13 warnings and 0 errors (no new errors; some new hook-warning warnings in `RepoWorkspace.tsx` and `Dashboard.tsx`); `npm run build` passed (Vite 8.3.4, 5550 modules transformed). No frontend test script or `*.test.*`/`*.spec.*` files exist, so no unit tests were run. Headless Chrome/CDP against a temporary backend DB used `https://github.com/encode/httpx`: detail showed "Not indexed" + "Start indexing"; after clicking Start, active and Ready badges appeared; Overview showed ENTRY POINTS, SYMBOLS, `line n:` entry evidence and `.py:n–n` symbol evidence; the dashboard showed Ready. A second repo (`fastapi/typer`) confirmed workspace unmount cleanup: 2 status requests at unmount and still 2 after 6s on the dashboard. A bad URL repo showed Failed, `[git_failed]` text and Retry in the timeline. Screenshot/result artifacts were written only under the OS temp directory. Temporary backend, Vite and Chrome processes were stopped; no commit or push was made.
+- **Known issues / TODOs:** Entering Reader/Plan/Context can crash because `src/api/galaxy.ts` returns `{data, demo}` for those mock routes while `RepoWorkspace.tsx` reads `results.<mode>.response` (`frontend/src/pages/RepoWorkspace.tsx:295-305`). The "Not implemented yet" labels exist in the three panels (`ReaderPanel.tsx:68`, `PlanPanel.tsx:111`, `ContextPanel.tsx:120`) but the Reader label could not be verified in-browser because of that crash; this is outside the Part 2 UI scope. Headless Chrome could not create a WebGL context, so `CanvasErrorBoundary` fell back to the 2D graph; 3D rendering was not verified. `docs/api_contract.md`, `docs/openapi.json` and `docs/postman_collection.json` still describe the Part 2 routes as `501` stubs. Lint warnings remain.
+
+---
+
+## Step 2A verification - live backend flow and cache fix
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** modified `backend/app/pipeline/cache/__init__.py`, `backend/tests/test_indexing.py`, `docs/project_summary.md`, `docs/changes.md`; no files created or deleted.
+- **What changed and why:** Exercised the live Part 2 flow against a real public GitHub repository before UI work. An unchanged re-index was re-cloning because `is_index_current()` required `repo.status == "ready"` while `POST /repos/{id}/index` had already written `queued`. The cache predicate now accepts `ready` or `queued` and still requires both `commit_sha` and a stored summary SHA match. Added an endpoint-level regression test that fails if cloning happens on an unchanged re-index.
+- **New commands / env variables / endpoints / migrations:** no new endpoints, migrations, packages or env variables. Regression test: `backend/tests/test_indexing.py::test_reindex_through_endpoint_uses_cache`.
+- **Verification:** `cd backend && source .venv/bin/activate && python -m pytest -q -p no:cacheprovider` → **266 passed, 5 warnings in 11.94s**. Live API flow with `https://github.com/sloria/environs`: signup `201`, verify `200`, login `200`, add repo `201` with `status: "added"`; POST `/index` → `202 {"status":"queued"}`; status transitions `cloning @0.002s`, `indexing @5.631s`, `ready @5.689s`; summary SHA `2a2733d98050174d69f80729eec99e80521ed2d7`, 30 file-tree entries, 37 classes / 181 methods / 40 functions, 258 total symbols, 15 files indexed, 273 graph nodes, 124 edges, 2752 LOC. Double-start returned `409` with "Indexing is already cloning for this repo." A bad URL ended `failed` with a readable `[git_failed]` error and `/summary` returned `409`. Another user's repo ID returned `404` for status, summary and start. After the fix, an unchanged re-index returned in `0.008s`. No code from analyzed repositories was executed.
+- **Known issues / TODOs:** no explicit "Index cache hit" INFO line was observed; cache behaviour is evidenced by the timing and the regression test. `docs/api_contract.md`, `docs/openapi.json` and `docs/postman_collection.json` still document the Part 2 routes as stubs.
+
+---
+
+## Step 2A - Part 2 backend wiring
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/alembic/versions/b7c1f2a9d4e6_add_repo_index_fields.py`, `backend/app/schemas/indexing.py`, `backend/tests/test_indexing.py`; modified `backend/app/models/repo.py`, `backend/app/schemas/repo.py`, `backend/app/features/indexing/router.py`, `backend/app/tasks/__init__.py`, `backend/app/pipeline/cache/__init__.py`, `backend/app/main.py`, `backend/tests/test_stubs.py`, `docs/project_summary.md`, `docs/changes.md`; no files deleted.
+- **What changed and why:** Wired Part 2 end to end on the backend only. A new Alembic revision adds `repos.error_message` and `repos.index_summary`; the repo model and `RepoOut` expose them. `POST /repos/{repo_id}/index` now sets `queued`, rejects concurrent runs, and schedules `run_index_pipeline` with FastAPI `BackgroundTasks`. The task runs clone → AST index → graph → chunk through the existing pipeline modules, persists `commit_sha` after clone, updates status at each step, stores a JSON summary for the overview endpoint, cleans up clone folders on failure, and logs seconds per 10k lines of code. `GET .../index/status` returns status/SHA/error; `GET .../index/summary` returns real file tree, symbol counts, modules, entry points and symbols with file:line, or 409 before ready. `pipeline/cache` now implements commit-SHA hit detection; unchanged files still reuse `ChunkStore.file_cache`. Startup recovery marks repos left in `queued`/`cloning`/`indexing` as failed. Part 3–4 stubs were left alone; only their old Part 2 stub cases were removed from `test_stubs.py`.
+- **New commands / env variables / endpoints / migrations:** endpoints changed from 501 to live: `POST /repos/{repo_id}/index` (202/409), `GET /repos/{repo_id}/index/status`, `GET /repos/{repo_id}/index/summary` (200/409). New Alembic revision `b7c1f2a9d4e6` (`down_revision = 09282e667a32`). No new env vars, packages or CLI commands.
+- **Verification:** `source .venv/bin/activate && python -m pytest -q -p no:cacheprovider` → 265 passed, 5 warnings. `alembic upgrade head && alembic check` against a temporary SQLite DB → "No new upgrade operations detected." No servers started and no analyzed repository was executed.
+- **Known issues / TODOs:** Phase B is not started: frontend still uses `added`/`indexing`/`indexed`/`error` statuses and the mock fallback in `src/api/galaxy.ts`, so it cannot yet show the new `queued`/`cloning`/`indexing`/`ready`/`failed` flow or real summary. `docs/openapi.json`, `docs/api_contract.md` and Postman were not regenerated in this step. Live GitHub clone/size failures were not exercised against the network; failure paths were tested with monkeypatched clone errors.
+
+---
+
 ## Step 0 - Project kickoff files
 
 - **Date:** 2026-10-08
@@ -366,3 +608,201 @@ Every step appends an entry here. Never delete old entries.
   - `safe_clone` is not yet wired to the indexing endpoint or a background task, so the SHA is not yet persisted to a `Repo` row by the app (the column and migration are ready).
   - The pre-clone GitHub size probe calls `api.github.com` best-effort; if it is unreachable the clone still proceeds and is checked after cloning instead.
   - `data/clones/` is gitignored and can be safely deleted to reset the sandbox.
+
+---
+
+## Step 2 - AST indexer
+
+- **Date:** 2026-10-20
+- **Files created:**
+  - `backend/app/pipeline/indexer/models.py` - `Symbol` (name, kind, file, `line_start`/`line_end`, signature, docstring, `parent`), `ImportRef` (module, names, alias, level), `CallRef`, `FileIndex`, `RepoIndex`, `SymbolKind`.
+  - `backend/app/pipeline/indexer/parser.py` - `parse_source(source, file)` / `parse_file(path)`: walks Python's `ast` and records functions, classes, methods, imports and calls without importing or executing the analyzed code.
+  - `backend/app/pipeline/indexer/repo.py` - `index_repo(folder)`: walks a folder with `IGNORED_DIRS` / `IGNORED_FILE_PREFIXES` / `IGNORED_FILE_SUFFIXES`, skips unparsable files with a logged reason, returns a `RepoIndex`.
+  - `backend/app/pipeline/indexer/detect.py` - `is_test_file` and `find_entry_points` (`__name__ == "__main__"` guards, FastAPI/Flask route decorators, argparse/Click/Typer CLIs).
+  - `backend/app/pipeline/indexer/__main__.py` - CLI entry point printing `kind | name | file:line` rows and a summary.
+  - `backend/app/pipeline/indexer/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_indexer.py` - 24 tests.
+- **Files modified:** none outside the new package (no dependency, env var, endpoint or migration).
+- **What changed and why:** Built the deterministic index the rest of the pipeline reads from. `parse_source` turns source text into `Symbol`/`ImportRef`/`CallRef` records with exact line ranges taken from the AST, so every later claim can cite `file:line`. Classes and methods record their dotted `parent` (`Dog.bark`), signatures are reconstructed with `ast.unparse`, and the first body docstring is kept. Entry-point detection exists because the graph step needs a defensible place to start a reading order. The indexer never imports the target code — it only parses it.
+- **New commands / env variables / endpoints / migrations:**
+  - Command (from `backend/`): `python -m app.pipeline.indexer <folder>`.
+  - Tests: `python -m pytest tests/pipeline/test_indexer.py -q` (24 passed); full suite at this step: 156 passed.
+  - No new dependencies, env vars, HTTP endpoints or migrations.
+- **Known issues / TODOs:**
+  - Python-only: only `.py` files are parsed; other languages are ignored.
+  - Not wired to any HTTP route or background task, and nothing persists a `RepoIndex` yet.
+  - Files that fail to parse are skipped and recorded in `RepoIndex` with a parse error rather than failing the whole run.
+  - Import/call resolution is syntactic; dynamic imports and runtime aliasing are out of scope.
+
+---
+
+## Step 3 - Code graph and reading order
+
+- **Date:** 2026-10-20
+- **Files created:**
+  - `backend/app/pipeline/graph/models.py` - `GraphNode` (module or symbol, `file`), `GraphEdge` (`import` / `call`), `CentralityScore` (in-degree, PageRank, combined `score`), `GraphResult`.
+  - `backend/app/pipeline/graph/builder.py` - `build_graph(repo_index)`: module and symbol nodes, import edges resolved through dotted/relative imports and package `__init__.py`, call edges resolved through import bindings, in-degree + PageRank centrality, entry modules, Mermaid text.
+  - `backend/app/pipeline/graph/reading_order.py` - `reading_order(...)`: breadth-first from entry modules, following imports, ties broken by centrality, cycle-safe.
+  - `backend/app/pipeline/graph/mermaid.py` - `mermaid_diagram(result)`: Mermaid flowchart text for the graph.
+  - `backend/app/pipeline/graph/__main__.py` - CLI entry point printing central modules, reading order and the diagram.
+  - `backend/app/pipeline/graph/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_graph.py` - 16 tests.
+- **Files modified:** `backend/requirements.txt` - added `networkx==3.7`.
+- **What changed and why:** Turned the flat index into a graph so connections and importance become explicit. Modules are nodes (`core/config.py`) and so are symbols (`core/config.py:get_settings`); `import` edges connect modules and `call` edges connect symbols, both resolved statically against the indexed file set. Each module gets a `CentralityScore` that adds its normalized in-degree to its normalized PageRank, and the reading order walks from detected entry points breadth-first so a newcomer starts where execution starts. The Mermaid renderer gives the frontend a diagram without a graphing library.
+- **New commands / env variables / endpoints / migrations:**
+  - Command (from `backend/`): `python -m app.pipeline.graph <folder>`.
+  - Dependency: `networkx` (added to `backend/requirements.txt`).
+  - Tests: `python -m pytest tests/pipeline/test_graph.py -q` (16 passed); full suite at this step: 172 passed.
+  - No env vars, HTTP endpoints or migrations.
+- **Known issues / TODOs:**
+  - Not wired to any HTTP route (the frontend's graph is still demo data); nothing persists a `GraphResult`.
+  - Resolution is static and best-effort: conditional/dynamic imports, `importlib`, and re-exports beyond simple bindings will be missed.
+  - Python-only, because it consumes the indexer's `RepoIndex`.
+  - Reading order reflects imports and centrality, not runtime behaviour.
+
+---
+
+## Step 4 - Chunking with tiktoken and SQLite cache
+
+- **Date:** 2026-10-21
+- **Files created:**
+  - `backend/app/pipeline/chunking/models.py` - `Chunk` (id, name, kind, file, line range, text, `token_count`, `file_hash`, `commit_sha`, `too_large`), `ChunkSet`, `MAX_TOKENS = 2000`.
+  - `backend/app/pipeline/chunking/builder.py` - `build_chunks(folder, commit_sha, db_path)`: one chunk per function/class/method, a `# file:line` header, class chunks with signature + docstring + method names, tiktoken `cl100k_base` counts, per-file sha256, cache reuse.
+  - `backend/app/pipeline/chunking/store.py` - `ChunkStore`: SQLite `chunks` keyed by `(commit_sha, chunk_id)` and `file_cache` keyed by `(file, file_hash)`.
+  - `backend/app/pipeline/chunking/__main__.py` - CLI entry point (`--sha`, `--db`) printing totals, cache counts, timing and the largest chunks.
+  - `backend/app/pipeline/chunking/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_chunking.py` - 11 tests.
+- **Files modified:** `backend/requirements.txt` - added `tiktoken==0.14.0`.
+- **What changed and why:** Produced the retrievable units: symbol-sized chunks with honest size numbers, stored per commit. Each chunk's text starts with `# file.py:line`, so a chunk names its own source; class chunks keep the signature, docstring and method names while method bodies live in their own chunks, so no code is stored twice. Token counts use tiktoken's `cl100k_base`; anything over 2000 tokens is flagged `too_large` but never split, because splitting a function would break its citation. The SQLite store keeps each commit's chunk set separately and a `file_cache` row per `(file, content hash)` so re-runs skip unchanged files instead of re-parsing them.
+- **New commands / env variables / endpoints / migrations:**
+  - Command (from `backend/`): `python -m app.pipeline.chunking <folder> [--sha SHA] [--db PATH]`.
+  - Dependency: `tiktoken` (added to `backend/requirements.txt`); the tokenizer must be downloadable/cached, otherwise the build fails loudly with a clear message.
+  - Storage: `backend/data/chunks.db` by default (`--db` overrides); `backend/data/` is gitignored.
+  - Tests: `python -m pytest tests/pipeline/test_chunking.py -q` (11 passed); full suite at this step: 183 passed.
+  - No env vars, HTTP endpoints or migrations.
+- **Known issues / TODOs:**
+  - Python-only, because it consumes the indexer's `Symbol` records.
+  - Not wired to any HTTP route or background task; no `Repo.status`/`Repo.commit_sha` update.
+  - `too_large` chunks are flagged, not split, so a very long function stays one oversized chunk.
+  - The cache is local SQLite only; changing the chunking strategy makes old `file_cache` rows stale (they are keyed by content hash, not by strategy version).
+
+---
+
+## Step 5 - BM25 retrieval and failure notes
+
+- **Date:** 2026-10-21
+- **Files created:**
+  - `backend/app/pipeline/retrieval/tokenizer.py` - `tokenize(text)`: lowercase word tokens shared by indexing and querying; splits `snake_case`, `camelCase`/`PascalCase`, acronyms, letter/digit boundaries and paths; drops one-character tokens.
+  - `backend/app/pipeline/retrieval/index.py` - `BM25Index` (rank_bm25 `BM25Okapi` over one commit's chunks), `load_index(commit_sha, db_path)`, `default_commit_sha()`, `UnknownCommitError`.
+  - `backend/app/pipeline/retrieval/models.py` - `SearchResult` (chunk id, symbol, kind, file, line range, score, token count).
+  - `backend/app/pipeline/retrieval/queries.py` - batch runner: one query per line, prints the top 5 per query.
+  - `backend/app/pipeline/retrieval/__main__.py` - CLI entry point (`--k`, `--sha`, `--db`) printing the commit and ranked results.
+  - `backend/app/pipeline/retrieval/__init__.py` - re-exports the public API.
+  - `backend/tests/pipeline/test_retrieval.py` - 19 tests.
+  - `backend/data/queries.txt` - the 10 test queries (5 exact names, 5 plain-word ideas). `backend/data/` is gitignored, so this file is local-only.
+  - `backend/data/bm25_failure_notes.md` - per-query correct answer, top 3 results, hit/miss and reason, plus the summary and failure patterns. Local-only for the same reason.
+- **Files modified:** `backend/requirements.txt` - added `rank-bm25==0.2.2` and `numpy==2.5.4`.
+- **What changed and why:** Added the deterministic retrieval baseline, with no AI. The index is built over exactly one commit's stored chunks; each chunk's searchable text repeats the symbol name three times and adds the file path, signature, first docstring and body identifiers (keywords removed), so an exact-name query has a fair chance against short schema classes. Query and index both use the same tokenizer, so `verify_token` matches "verify token". Missing DBs, missing tables and unknown commit SHAs raise clear errors instead of crashing. The measured baseline is written down rather than assumed: 7/10 queries hit in the top 3 — exact names 5/5 (ranks 2, 3, 3, 1, 1), plain-word queries 2/5 — with three documented failure patterns (vocabulary mismatch, generic-word capture plus short-chunk bias, usage chunks outranking definitions).
+- **New commands / env variables / endpoints / migrations:**
+  - Commands (from `backend/`): `python -m app.pipeline.retrieval "<query>" [--k N] [--sha SHA] [--db PATH]` and `python -m app.pipeline.retrieval.queries <file>`.
+  - Dependencies: `rank-bm25`, `numpy` (added to `backend/requirements.txt`).
+  - Tests: `python -m pytest tests/pipeline/test_retrieval.py -q` (19 passed); full suite: **202 passed**.
+  - No env vars, HTTP endpoints or migrations; `POST /repos/{repo_id}/query` is still a `501` stub.
+- **Known issues / TODOs:**
+  - Retrieval is not wired to any HTTP endpoint or to the frontend; it is CLI/library only.
+  - No embeddings or reranking (that is the fix the failure notes point to), so plain-word queries with vocabulary mismatch still miss.
+  - Results depend on running the chunking step first; a missing or empty DB produces a clear error.
+  - `backend/data/queries.txt` and `backend/data/bm25_failure_notes.md` are gitignored, so the baseline and notes are not committed with the code.
+  - The failure notes end with "Drafted by the agent, reviewed by me: PENDING" — human review of the notes is still outstanding.
+
+---
+
+## Clone security fix - URL allow-list narrowed to public GitHub HTTPS
+
+- **Date:** 2026-10-21
+- **Files created / modified:**
+  - `backend/app/pipeline/clone/clone.py` - `ALLOWED_SCHEMES` is now `{"https"}`; new `_validate_github_url` (https scheme, host exactly `github.com`, `/owner/repo` path, no credentials/ports/query/fragment, no leading `-`, no whitespace or control characters); the clone body moved into `_clone_repository`; `_probe_github_size_kb` now probes only `https` + `github.com`.
+  - `backend/tests/pipeline/test_clone.py` - the offline `file://` tests now go through the test-only `clone_local_fixture` helper; added allow-list tests (accepted GitHub URLs, rejected schemes/hosts/credentials/ports/query/fragment/dash/whitespace, and "git never runs for a rejected URL").
+  - `docs/project_summary.md` - the clone URL allow-list known issue is marked fixed.
+- **What changed and why:** `safe_clone` is the entry point the app will call once cloning is wired to the API, so it must not let a logged-in user point it at a local path or an internal host (SSRF). It now accepts only `https://github.com/<owner>/<repo>` (`.git` optional) and rejects everything else with `CloneError("invalid_url")`: the `file`, `ssh`, `git` and `http` schemes and every other scheme, any host that is not exactly `github.com` (including `github.com.evil.com`, `evilgithub.com`, `www.github.com` and `github.com.`), embedded `user:pass@` credentials, explicit ports, query strings, fragments, URLs starting with `-` (git option injection) and URLs holding whitespace or control characters. Local `file://` clones stay possible for the offline tests through `clone_local_fixture`, a helper that lives in the test file and only accepts local `file://` paths, so no production code path can clone a local path.
+- **New commands / env variables / endpoints / migrations:** none. Tests: `python -m pytest tests/pipeline/test_clone.py -q` (74 passed); full suite: **247 passed**.
+- **Known issues / TODOs:**
+  - `safe_clone` is still not wired to any endpoint; when it is, the route must hand the user-supplied URL to `safe_clone` unchanged, so the allow-list stays the only gate.
+  - The clone still trusts the remote repository; the pre-flight size probe and the post-clone size check are the only size limits.
+  - `docs/project_summary.md` still shows the old test counts (202 passing, `test_clone.py` 29) in its status sections; they are now 247 and 74.
+
+---
+
+## Pipeline PHASE 1b - Clone cleanup / retention
+
+- **Date:** 2026-10-17
+- **Files created:**
+  - `backend/app/pipeline/clone/cleanup.py` - `remove_clone(path, root)`, `configured_clone_root()`, `clone_workspace(url, config)`, `sweep_stale_clones(max_age_seconds, root)`.
+  - `backend/tests/pipeline/test_cleanup.py` (16 tests).
+- **Files modified:**
+  - `backend/app/pipeline/clone/clone.py` - failure paths now delete the partial folder through `remove_clone` (via a best-effort `_discard` helper); `git_not_found` also cleans up. Public behavior unchanged.
+  - `backend/app/pipeline/clone/__init__.py` - re-exports the cleanup API.
+  - `backend/app/core/config.py` - added `CLONE_STALE_MAX_AGE_SECONDS` (default 3600).
+  - `backend/.env.example` - documented `CLONE_STALE_MAX_AGE_SECONDS`.
+  - `backend/app/main.py` - FastAPI `lifespan` runs `sweep_stale_clones` once on startup, wrapped in `try/except` so a sweep error never blocks startup.
+  - `docs/project_summary.md` - tree, Layer 5 (`pipeline/clone` cleanup study note), Current Status, help.
+  - `docs/changes.md` - this entry.
+- **What changed and why:** Clones are temporary scratch space: only derived data and the commit SHA are kept, the folder is deleted as soon as it is no longer needed. `clone_workspace()` is a context manager that always removes the folder in `finally` (success, exception, timeout, failed clone). `remove_clone()` only deletes paths that resolve inside the clone root (refuses the root itself, outside paths and `..` tricks), unlinks symlinks instead of following them, and makes read-only git objects writable so deletion succeeds; a missing folder returns `False`. `sweep_stale_clones()` deletes direct child folders older than the max age (mtime), logs and continues past a single failure, and never touches anything outside the root.
+- **New commands / env variables / endpoints / migrations:**
+  - Env var: `CLONE_STALE_MAX_AGE_SECONDS` (default 3600).
+  - Test command: `python -m pytest tests/pipeline/test_cleanup.py -q` (16 passed); full suite `python -m pytest -q` (148 passed = 103 previous + 29 clone + 16 cleanup).
+  - No new Python dependencies (stdlib only).
+  - No new HTTP endpoint or migration.
+- **Known issues / TODOs:**
+  - `safe_clone` is still not wired to any endpoint or task, so `clone_workspace` is not used by the app yet — **TODO:** wrap the pipeline in `clone_workspace` when it is built.
+  - The startup sweep only sees the configured `CLONE_ROOT`; other roots are swept by passing `root=` explicitly.
+
+---
+
+## Hygiene - merge conflicts, schema defaults and pipeline diff cleanup
+
+- **Date:** 2026-11-24
+- **Files modified:**
+  - `docs/project_summary.md` - removed all unresolved conflict markers by keeping the up-to-date descriptions (clone cleanup, indexer/graph/chunking/retrieval CLIs, 263-test count, complete env var list) over the stale "empty folders" side; corrected the Part 1 status to match the frontend present at that point (no forgot/reset/settings pages).
+  - `docs/changes.md` - removed conflict markers around the Stage 2 and clone-cleanup entries, keeping both histories; this entry.
+  - `README.md` - corrected the stale "frontend is empty" claim and the follow-up that over-listed unbuilt pages; added the React/TypeScript/Vite stack and updated the folder map.
+  - `backend/app/models/user.py` - added `server_default=false()` to `is_verified` so `create_all` matches migration `9dbee76d77e4`.
+  - `backend/app/models/repo.py` - added `server_default="added"` to `status` so `create_all` matches migration `9dbee76d77e4`.
+  - `backend/app/pipeline/clone/clone.py` - reviewed the existing uncommitted diff only; no further edits. It removes the leftover conflict-marker block and the unused `shutil` import.
+  - `backend/tests/pipeline/test_cleanup.py` - kept the existing test-only `file://` clone helper (the production allow-list accepts only GitHub HTTPS URLs) and added the same `safe_clone` monkeypatch to the timeout and oversized tests. Without it those two tests failed with `invalid_url` instead of reaching the timeout/size paths; all five offline cleanup tests now use the helper.
+- **What changed and why:** The merge left literal conflict markers in the living docs and the ORM defaults did not carry the database-level defaults already present in the first migration, so tests that build the schema with `create_all` produced a slightly different database shape. The docs now render cleanly and describe the code that actually exists; the model defaults match the migration. Two offline cleanup tests were repaired so the full suite passes.
+- **New commands / env variables / endpoints / migrations:** none. Existing verification: `python -m pytest -q -p no:cacheprovider` and `alembic check` from `backend/`.
+- **Known issues / TODOs:** Part 2–4 endpoints remain `501` stubs; the pipeline is still not wired to the API. `git grep` reports zero conflict markers in tracked files. No commit was made.
+
+---
+
+## Part 1 gaps - password recovery, account settings and docs reconciliation
+
+- **Date:** 2026-11-24
+- **Files created:**
+  - `backend/tests/test_schema_defaults.py` - 2 raw-`INSERT` regression tests proving `users.is_verified` and `repos.status` carry the same database defaults as migration `9dbee76d77e4` (from the earlier hygiene work in this same batch).
+  - `frontend/src/pages/ForgotPassword.tsx` - email form for `POST /auth/forgot-password`; shows one generic "check your email" message whether or not the account exists.
+  - `frontend/src/pages/ResetPassword.tsx` - reads `?token=`, validates the new password with the backend's rules, posts to `POST /auth/reset-password`.
+  - `frontend/src/pages/AccountSettings.tsx` - profile summary, `POST /auth/change-password`, and `DELETE /auth/account` behind a type-your-email confirmation.
+- **Files modified:**
+  - `frontend/src/App.tsx` - added `/forgot-password` and `/reset-password` under `GuestRoute`, `/settings` under `ProtectedRoute`/`AppLayout`.
+  - `frontend/src/components/Navbar.tsx` - user menu now links to Account settings.
+  - `frontend/src/pages/Login.tsx` - login form links to Forgot password.
+  - `docs/project_summary.md` - front tree, intro, Layer 8 study notes, Current Status and part status now describe the three new pages; all 7 conflict blocks from the merge were resolved by keeping the accurate pipeline descriptions and adding the clone-cleanup note; test counts refreshed to 265 with the real per-file breakdown.
+  - `docs/changes.md` - conflict markers around the Step 2–5 and clone-cleanup entries were removed while keeping both histories; previous hygiene entry clarified; this entry.
+  - `README.md` - removed the claims that the frontend is absent and the pipeline is empty; added the frontend stack and folder-map entries.
+- **What changed and why:** The backend already exposes forgot/reset/change-password and delete-account, but the UI had no pages for them, so those features were unreachable without calling the API directly. The new pages reuse the existing typed auth wrappers and the shared auth layout/validation components. The committed merge markers in both living docs made them unusable as guides, so they were resolved from the real files rather than by picking a side.
+- **New commands / env variables / endpoints / migrations:** none. Routes added are frontend-only (`/forgot-password`, `/reset-password`, `/settings`); no backend endpoint, env var or migration changed.
+- **Verification:** backend `python -m pytest tests/ -q` → 265 passed; `alembic check` → no new upgrade operations; frontend `npm run typecheck` and `npm run build` pass; `git grep` finds no conflict markers.
+- **Known issues / TODOs:** `GuestRoute` redirects already-signed-in users away from `/forgot-password` and `/reset-password`; they can use Account settings instead. The reset token is pasted manually because the backend email link carries it as a token, not a deep link to the page. Part 2–4 endpoints are still `501` stubs and the pipeline is not wired to the API. No commit was made.
+
+---
+
+## Tests - schema defaults regression and bug scan
+
+- **Date:** 2026-11-24
+- **Files created:** `backend/tests/test_schema_defaults.py` (2 tests).
+- **Files modified:** `README.md`, `docs/project_summary.md`, `docs/changes.md`.
+- **What changed and why:** Added raw-SQL regression tests for the defaults added to `User.is_verified` and `Repo.status`: each inserts a row that omits the column and asserts the database supplies `False` / `"added"`. This pins the ORM/migration parity fix instead of relying on `alembic check`, which does not compare server defaults by default. README and the living summary were reconciled with the password-recovery/account-settings pages and the new 265-test count (the in-tree `test_clone.py` count of 29 was also stale; it is 74).
+- **Verification:** backend `python -m pytest -q -p no:cacheprovider` → **265 passed**, 5 pre-existing warnings; `alembic check` → no new upgrade operations; frontend `npm run typecheck` → clean; `npm run lint` → 10 pre-existing warnings, no errors; no conflict markers in tracked or worktree files.
+- **Known issues / TODOs:** No test failures or new bugs found. Frontend lint warnings (React immutability / setState-in-effect / fast-refresh) are pre-existing and not fixed here. No commit was made.

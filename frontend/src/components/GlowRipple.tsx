@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 export function SuccessRipple({
   show,
   className,
-  color = 'rgba(22,163,74,0.45)',
+  color = 'rgba(4,120,87,0.45)',
 }: {
   show: boolean
   className?: string
