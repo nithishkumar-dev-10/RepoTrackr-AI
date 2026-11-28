@@ -4,6 +4,17 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 7: full verification and real Part 2 E2E
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `docs/project_summary.md` and `docs/changes.md`; no repository files created or deleted. The E2E driver lived in the approved OS temp folder, not in the repo.
+- **What changed and why:** `docs/project_summary.md` now matches the verified current state: it documents the live `/graph` route, the redacted/dev-safe email fallback, correct per-file test counts, the fact that `safe_clone` is invoked by the HTTP background task, a Current verification section, and updated "Where You Can Help" notes (only Part 3–4 routers remain stubs; 301 tests exist). Stale claims about tokenized links in logs, 265/271 tests and missing HTTP wiring were removed.
+- **New commands / env variables / endpoints / migrations:** none added. Verification used the existing commands plus a temporary E2E driver with `DATABASE_URL`, `CLONE_ROOT`, `SMTP_HOST=""` and `PYTHONPATH` set only for that process; the temp DB was migrated from zero to `c4d8e7a1b2f3` with Alembic.
+- **Verification:** backend venv `python -m pytest -q` → **301 passed, 10 warnings in 7.35s**; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`. Frontend `npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeded (large-chunk advisory only). Real API E2E against `https://github.com/keleshev/schema` on a fresh temp DB: pre-ready `/index/summary` and `/graph` returned 409, `POST /index` returned 202, status ended `ready`; summary reported 20 file-tree entries, 4 files indexed/cached, 216 symbols, 3,335 LOC, 220 graph nodes, 266 graph edges, 4 centrality rows, `index_seconds` 1.953 and `seconds_per_10k_loc` 5.856; `/graph` returned 220 nodes, 266 edges, 2 clusters, `truncated: false`. No code from the cloned repository was executed; the indexer parses source with `ast`.
+- **Known issues / TODOs:** browser UI confirmation is **SKIPPED** because no browser/Playwright/Puppeteer runner is installed in this environment; the API path is fully verified. `backend/repotrackr.db.bak` remains untracked in the working tree and must never be committed. Vite's large-chunk advisory and the missing frontend test runner remain documented limitations.
+
+---
+
 ## Audit closeout - Task 6: documentation accuracy and dev-dependency verification
 
 - **Date:** 2026-11-28

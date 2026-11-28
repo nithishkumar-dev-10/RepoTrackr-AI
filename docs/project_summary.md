@@ -1085,17 +1085,20 @@ Run the API (from `backend/`, venv active):
 uvicorn app.main:app --reload        # serves http://127.0.0.1:8000
 curl http://127.0.0.1:8000/health    # -> {"status":"ok"}
 ```
-Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `indexing`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout` (optional `refresh_token` body revokes that token server-side), `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2 routes are live under `/repos/{repo_id}/index` (`POST` 202 `{"status":"queued","message":"Indexing queued."}`, 409 when already running; `GET .../status` 200; `GET .../summary` 200 only when ready, otherwise 409/500 for invalid stored data). The Part 3–4 routes (plan, reader, context, query, agent/trace, evals) remain registered stubs returning `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. To see verification/reset links locally, leave `SMTP_HOST` empty in `.env`: the messages are logged to the server console with their `http://localhost:3000/...?token=...` links.
+Swagger UI is at `http://127.0.0.1:8000/docs` (endpoints grouped by tag: `system`, `auth`, `repos`, `indexing`, `stubs`) and the raw spec at `/openapi.json` (also exported to `docs/openapi.json`). `GET /health` answers as long as the app imports. The full auth surface is live under `/auth` (`signup`, `verify-email`, `resend-verification`, `login`, `refresh`, `logout` (optional `refresh_token` body revokes that token server-side), `forgot-password`, `reset-password`, `change-password`, `account`, `me` — see `docs/api_contract.md`), and repo CRUD is live under `/repos` (`POST`, `GET`, `GET /{id}`, `DELETE /{id}`, all requiring a Bearer token). The Part 2 routes are live under `/repos/{repo_id}/index` (`POST` 202 `{"status":"queued","message":"Indexing queued."}`, 409 when already running; `GET .../status` 200; `GET .../summary` 200 only when ready, otherwise 409/500 for invalid stored data) and `/repos/{repo_id}/graph` (frontend `Graph` mapped from the stored deterministic graph, capped at 300 nodes / 1000 edges with `truncated`, 409 before ready). The Part 3–4 routes (plan, reader, context, query, agent/trace, evals) remain registered stubs returning `501 {"status": "not_implemented"}`; repo-scoped ones still enforce the same 401/404 rules. With `SMTP_HOST` empty in `.env`, the fallback logs only the recipient and subject; raw verification/reset tokens are never printed, so local verification uses the dev flow described in the auth layer notes instead of reading links from logs.
 
 Run the tests (from `backend/`, venv active):
 ```bash
-python -m pytest tests/ -q                  # 271 passing (auth/repos/stubs + pipeline)
-python -m pytest tests/test_security.py -q  # 18
-python -m pytest tests/test_auth.py -q      # 37
-python -m pytest tests/test_repos.py -q     # 19
-python -m pytest tests/test_stubs.py -q     # 20
-python -m pytest tests/test_indexing.py -q  # 10
-python -m pytest tests/pipeline/ -q         # 140 (clone 74, cleanup 16, indexer 24, graph 16, chunking 11, retrieval 19)
+python -m pytest tests/ -q                        # 301 passing
+python -m pytest tests/test_security.py -q        # 18
+python -m pytest tests/test_auth.py -q            # 42
+python -m pytest tests/test_batch1_hardening.py -q # 13
+python -m pytest tests/test_repos.py -q           # 19
+python -m pytest tests/test_stubs.py -q           # 20
+python -m pytest tests/test_indexing.py -q        # 10
+python -m pytest tests/test_graph_endpoint.py -q  # 5
+python -m pytest tests/test_schema_defaults.py -q # 2
+python -m pytest tests/pipeline/ -q               # 172 (clone 74, cleanup 16, indexer 24, graph 16, chunking 11, redaction 12, retrieval 19)
 ```
 
 Run the deterministic pipeline (from `backend/`, venv active; output to stdout only):
@@ -1106,7 +1109,7 @@ python -m app.pipeline.chunking ../some-folder --sha <commit-sha>
 python -m app.pipeline.retrieval "parse_github_url" -k 5
 python -m app.pipeline.retrieval.queries data/queries.txt
 ```
-The chunk store defaults to `backend/data/chunks.db` (gitignored; `--db` overrides it). Retrieval's `--sha` defaults to the commit with the most stored chunks. `safe_clone` has no CLI: it is a library call that takes a `CloneConfig(root=..., max_size_mb=..., timeout_seconds=...)`, and no endpoint invokes it. None of these commands updates the `repos` table or the API.
+The chunk store defaults to `backend/data/chunks.db` (gitignored; `--db` overrides it). Retrieval's `--sha` defaults to the commit with the most stored chunks. `safe_clone` has no CLI: it is a library call that takes a `CloneConfig(root=..., max_size_mb=..., timeout_seconds=...)`; the HTTP API invokes it through `app.tasks.run_index_pipeline` inside `clone_workspace()`. None of these commands updates the `repos` table or the API.
 
 Run the frontend (from `frontend/`, Node 20+):
 ```bash
@@ -1119,21 +1122,27 @@ npm run lint                # oxlint
 ```
 Start the backend first (from `backend/`, venv active) with `uvicorn app.main:app --reload`. The Vite dev server runs on port **5173**, so add `http://localhost:5173` (and `http://127.0.0.1:5173`) to `CORS_ORIGINS` in `backend/.env` or the browser will block the API calls. The workspace's reader, plan and context views show a "Demo data" badge until the Part 3–4 endpoints stop returning `501`; the graph is real unless `VITE_USE_MOCKS=true`.
 
+## Current verification
+
+- Backend (venv active, from `backend/`): `python -m pytest -q` → 301 passed, 10 warnings; `alembic check` → "No new upgrade operations detected."; `alembic current` → `c4d8e7a1b2f3 (head)`.
+- Real Part 2 API E2E on a temporary migrated database and clone root against `https://github.com/keleshev/schema`: verified user → login → `POST /repos` → `POST /repos/{id}/index` (202) → status → summary → graph. Pre-ready summary and graph returned 409; final status was `ready`. Summary numbers: 20 file-tree entries, 4 files indexed/cached, 216 symbols (22 class / 142 function / 52 method), 3,335 lines of code, 220 graph nodes, 266 graph edges, 4 centrality rows, 1 entry point, `index_seconds` 1.953 and `seconds_per_10k_loc` 5.856. The graph endpoint returned 220 nodes, 266 edges, 2 clusters and `truncated: false`. FastAPI's `TestClient` runs background tasks before returning the 202, so polling observed only the terminal `ready` status.
+- Frontend: `npm run typecheck` clean, `npm run lint` 0 warnings / 0 errors, `npm run build` succeeds with only the pre-existing large-chunk advisory. No browser automation runner is installed; UI confirmation is manual.
+
 ## Where You Can Help
 
 - **Layer 8, `frontend/`:** the client is built; when a Part 3–4 endpoint stops returning `501`, remove its entry from the mock fallback in `src/api/galaxy.ts` (and its "Demo data" badge will disappear automatically) or replace the `501` handling with the real shape.
-- **Layer 7, `app/main.py`:** the app factory exists and now includes all routers (auth, repos, and the Part 2–4 stubs) — replace stub routers with real ones and extend middleware as features are built.
+- **Layer 7, `app/main.py`:** the app factory includes auth, repo CRUD, live Part 2 indexing and the Part 3–4 stubs — replace the remaining stubs with real routers and extend middleware as features are built.
 - **Layer 7, `app/security/`:** helpers exist and are tested — extend them (e.g. token rehash checks) as auth needs grow.
 - **Layer 7, `app/schemas/`:** schemas for Part 1 exist (plus `stub.py`) — extend them (and `docs/api_contract.md`/`docs/mock_responses.md`/`docs/openapi.json`/`docs/postman_collection.json`) when endpoints change.
 - **Layer 7, `app/features/auth/`:** the full Part 1 auth surface (signup/verify/resend/login/refresh/logout/forgot/reset/change/delete/me) plus rate limiting is built; refresh tokens are stored as SHA-256 hashes and revoked on logout, password change and account deletion; `get_current_user` is reused by the repos feature and every repo-scoped stub.
 - **Layer 7, `app/core/ratelimit.py`:** limits exist for the abuse-prone auth endpoints — add them to other sensitive endpoints and consider a shared storage (Redis) for multi-process deploys.
 - **Layer 7, `app/features/repos/`:** repo CRUD plus `get_owned_repo` are built; Part 2 flips `status` through the pipeline instead of leaving it at `"added"`.
-- **Layer 7, stub routers:** `app/features/{indexing,plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 2–4 (they already enforce ownership).
+- **Layer 7, stub routers:** `app/features/{plan,reader,context}/router.py` and `app/agent/router.py` return `501`; implement them in Parts 3–4 (they already enforce ownership). `app/features/indexing/router.py` is live.
 - **Layer 2/3:** register a second model change by adding a model then running `alembic revision --autogenerate`; test `render_as_batch` behavior on SQLite.
-- **Layer 5, `app/pipeline/`:** clone (with cleanup), indexer, graph, chunking and retrieval exist as tested library + CLI code. What is missing is the HTTP wiring (endpoints, status tracking, `Repo.commit_sha`) and the `pipeline/cache` package; wire `safe_clone` into a `Repo` row and run each pipeline step inside `clone_workspace()` so scratch folders are removed as soon as a run finishes.
+- **Layer 5, `app/pipeline/`:** clone (with cleanup and redaction), indexer, graph, chunking, BM25 retrieval and `pipeline/cache` are tested library + CLI code, now wired to `app.tasks.run_index_pipeline` and the Part 2 endpoints. Next work is additional retrieval endpoints or more languages, not basic HTTP wiring.
 - **Layer 5, `app/analysis/retrieval`:** make sure every future AI claim can attach a real `file:line`, per the design rule.
 - **Layer 9:** add a real `docker/docker-compose.yml` and a Dockerfile; stand up the `evals/` harnesses.
-- **Tests:** `test_security.py`, `test_auth.py`, `test_repos.py`, `test_stubs.py` and `tests/pipeline/*` exist (265 passing) — extend them (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, real pipeline endpoints).
+- **Tests:** the backend suite has 301 passing tests covering security, auth hardening, repos, stubs, indexing/graph endpoints and `tests/pipeline/*` — extend it (e.g. `Settings` validation, `get_db()` lifecycle, migration up/down, browser-level UI checks).
 
 ## How To Contribute
 
