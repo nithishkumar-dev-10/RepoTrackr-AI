@@ -4,6 +4,28 @@ Every step appends an entry here. Never delete old entries.
 
 ---
 
+## Audit closeout - Task 1: bring local database to head
+
+- **Date:** 2026-11-28
+- **Files created / modified / deleted:** modified `docs/changes.md`; created the gitignored backup `backend/repotackr.db.bak`; no tracked source files changed.
+- **What changed and why:** backed up the local SQLite database before upgrading it, then applied the two pending Alembic migrations so the development database matches the models.
+- **New commands / env variables / endpoints / migrations:** `cd backend && .venv/bin/python -m alembic upgrade head` (applied `09282e667a32 -> b7c1f2a9d4e6 -> c4d8e7a1b2f3`); `cd backend && .venv/bin/python -m alembic check`.
+- **Verification:** `alembic current` reported `c4d8e7a1b2f3 (head)`; `alembic check` reported `No new upgrade operations detected.`
+- **Known issues / TODOs:** the backup is deliberately untracked and must never be committed.
+
+---
+
+## Bug Hunt Phase B - Batch 1 (rows 1, 2, 6, 7, 8, 9, 10, 11, 12, 21, 22, 30)
+
+- **Date:** 2026-11-25
+- **Files created / modified / deleted:** created `backend/tests/test_batch1_hardening.py`; modified `backend/.env.example`, `backend/app/core/config.py`, `backend/app/core/email.py`, `backend/app/features/auth/dependencies.py`, `backend/app/features/auth/router.py`, `backend/app/main.py`, `backend/app/security/__init__.py`, `backend/app/security/passwords.py`, `backend/app/security/tokens.py`, `backend/tests/conftest.py`, `backend/tests/test_auth.py`, `docs/api_contract.md`, `docs/project_summary.md`, `frontend/src/api/client.ts`, `frontend/src/context/AuthContext.tsx`, `frontend/src/lib/tokenStorage.ts`, `frontend/src/pages/Dashboard.tsx`, `frontend/src/pages/RepoWorkspace.tsx`; no files deleted.
+- **What changed and why:** Signup/login/resend/forgot now return neutral responses for unknown or duplicate accounts, and login verifies unknown users against a dummy argon2 hash. Refresh JWTs carry a random `jti`; refresh consumes the stored row with one conditional update and revoked rows are never reactivated. Password reset and change-password invalidate all refresh tokens plus unused RESET tokens. `decode_token` requires `exp`; `get_current_user` rejects unverified users. Validation errors strip `input`/`ctx`; SMTP fallback logs omit tokenized bodies; CORS rejects `*` because credentials are enabled. Added rate limits to verify-email, refresh, reset-password, change-password and logout. The frontend no-token branch sets `anonymous`, `client.ts` emits `rt:auth-invalidated` on final auth failure, `AuthContext` clears tokens and pollers stop, and token writes are guarded by a generation counter. Docs now state that rate limiting and startup recovery assume a single process.
+- **New commands / env variables / endpoints / migrations:** new env vars `RATE_LIMIT_REFRESH`, `RATE_LIMIT_VERIFY_EMAIL`, `RATE_LIMIT_RESET_PASSWORD`, `RATE_LIMIT_CHANGE_PASSWORD`, `RATE_LIMIT_LOGOUT`; no new commands, endpoints or migrations. No schema change.
+- **Verification:** the 13 new hardening tests plus 3 updated existing tests failed before the fixes (16 failed) and passed after. Full backend `python -m pytest -q -p no:cacheprovider` → **284 passed, 10 warnings in 15.77s**. Frontend `npm run typecheck` passed, `npm run lint` → 4 warnings / 0 errors (same pre-existing four), `npm run build` → 5551 modules transformed, built in 1.42s. Row 22 reproduced before fixing: `CORS_ORIGINS=["*"]` returned `Access-Control-Allow-Origin: https://evil.example` with `Access-Control-Allow-Credentials: true`. Fresh-profile CDP on a new Vite/backend pair showed `/login`, `/signup` and `/forgot-password` rendered with 0 localStorage keys and no spinner, and `/dashboard` redirected to `/login`; seeding invalid tokens produced 2 `rt:auth-invalidated` events, a `/login` redirect and 0 localStorage keys; a 1.5s delayed refresh that resolved after an invalidation event did not restore tokens. No commit or push was made.
+- **Known issues / TODOs:** rows 21 and 24 are documented single-process assumptions, not fixed. Row 35 and the remaining Batch 2–4 rows are untouched. The generation counter was verified in a browser with a mocked delayed refresh, not against a real backend race. `docs/postman_collection.json` still contains older signup/duplicate/login/unverified examples; `docs/openapi.json` was regenerated but unchanged because these status changes are not declared in FastAPI schemas. The four frontend lint warnings remain out of scope; no frontend unit runner exists.
+
+---
+
 ## Closeout Phase 4 - refresh-token revocation and atomic reset consumption
 
 - **Date:** 2026-11-25
